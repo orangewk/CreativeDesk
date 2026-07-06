@@ -206,6 +206,8 @@
     <button class="speed-btn" id="age-btn">Age color</button>
     <button class="speed-btn" id="migration-btn">Migration</button>
     <button class="speed-btn" id="machine-btn">Machine</button>
+    <button class="speed-btn" id="cinema-btn">Day/Night</button>
+    <button class="speed-btn" id="sat-btn">Satellites</button>
   </div>
   <div style="margin-top:4px; font-size:0.6rem; opacity:0.3;" id="shortcuts-label"></div>
   <div class="settings-group" style="margin-top:2px;">
@@ -239,6 +241,10 @@ import { OutputPass } from 'https://esm.sh/three@0.183.0/examples/jsm/postproces
       scenarioAgeless: 'Ageless: after 2030 death fades to accidents only — and births fade with it',
       machine: 'Machine',
       machineLegend: '<span style="color:#66ddff;">●</span> = 1 GW <small>(machine light, speculative)</small>',
+      cinema: 'Day/Night',
+      satellites: 'Satellites',
+      satLegendOne: '<span style="color:#aaccff;">●</span> = 1 satellite',
+      satLegendMany: '<span style="color:#aaccff;">●</span> = {n} satellites',
       speed: 'Speed',
       scenario: 'Scenario',
       display: 'Display',
@@ -290,6 +296,10 @@ import { OutputPass } from 'https://esm.sh/three@0.183.0/examples/jsm/postproces
       scenarioAgeless: '\u4E0D\u8001\uFF1A2030\u5E74\u4EE5\u964D\u3001\u6B7B\u306F\u4E8B\u6545\u3060\u3051\u306B\u8FD1\u3065\u304D\u3001\u51FA\u751F\u3082\u3068\u3082\u306B\u8584\u308C\u3066\u3044\u304F',
       machine: '\u6A5F\u68B0\u306E\u5149',
       machineLegend: '<span style="color:#66ddff;">\u25CF</span> = 1 GW <small>\uFF08\u6A5F\u68B0\u306E\u5149\u30FB\u60F3\u50CF\uFF09</small>',
+      cinema: '\u663C\u3068\u591C',
+      satellites: '\u885B\u661F',
+      satLegendOne: '<span style="color:#aaccff;">\u25CF</span> = \u885B\u661F1\u57FA',
+      satLegendMany: '<span style="color:#aaccff;">\u25CF</span> = \u885B\u661F{n}\u57FA',
       speed: '\u901F\u5EA6',
       scenario: '\u30B7\u30CA\u30EA\u30AA',
       display: '\u8868\u793A',
@@ -338,6 +348,8 @@ import { OutputPass } from 'https://esm.sh/three@0.183.0/examples/jsm/postproces
   document.getElementById('age-btn').textContent = t.ageColor;
   document.getElementById('migration-btn').textContent = t.migration;
   document.getElementById('machine-btn').textContent = t.machine;
+  document.getElementById('cinema-btn').textContent = t.cinema;
+  document.getElementById('sat-btn').textContent = t.satellites;
   document.getElementById('rotate-btn').textContent = t.rotate;
   document.querySelectorAll('.scenario-btn').forEach(function(btn) {
     btn.setAttribute('data-tip', t['tip' + btn.dataset.scenario.charAt(0).toUpperCase() + btn.dataset.scenario.slice(1)]);
@@ -926,6 +938,8 @@ import { OutputPass } from 'https://esm.sh/three@0.183.0/examples/jsm/postproces
     var DOT_VERTEX_SHADER = [
         'uniform float uTime;',
         'uniform float uWobble;',
+        'uniform vec3 uSunDir;',
+        'uniform float uDayFade;', // 1.0 = lights vanish in daylight (cinema mode)
         'attribute vec3 aColor;',
         'attribute float aSize;',
         'attribute float aAlpha;',
@@ -933,7 +947,8 @@ import { OutputPass } from 'https://esm.sh/three@0.183.0/examples/jsm/postproces
         'varying float vAlpha;',
         'void main() {',
         '  vColor = aColor;',
-        '  vAlpha = aAlpha;',
+        '  float sd = dot(normalize(position), uSunDir);',
+        '  vAlpha = aAlpha * (1.0 - uDayFade * smoothstep(-0.03, 0.12, sd));',
         '  float id = position.x * 13.7 + position.y * 7.3 + position.z * 11.1;',
         '  vec3 wobble = uWobble * vec3(',
         '    sin(uTime * 0.4 + id) * 0.15,',
@@ -961,7 +976,9 @@ import { OutputPass } from 'https://esm.sh/three@0.183.0/examples/jsm/postproces
       return new THREE.ShaderMaterial({
         uniforms: {
           uTime: { value: 0.0 },
-          uWobble: { value: wobble }  // 1.0 = full wobble (ancient), 0.0 = none
+          uWobble: { value: wobble },  // 1.0 = full wobble (ancient), 0.0 = none
+          uSunDir: { value: new THREE.Vector3(0, 0, 1) },
+          uDayFade: { value: 0.0 }
         },
         vertexShader: DOT_VERTEX_SHADER,
         fragmentShader: DOT_FRAGMENT_SHADER,
@@ -998,6 +1015,7 @@ import { OutputPass } from 'https://esm.sh/three@0.183.0/examples/jsm/postproces
       });
       (found || world.scene()).add(pointCloud);
       (found || world.scene()).add(machinePoints);
+      (found || world.scene()).add(satPoints);
       console.log('Points added');
     }, 500);
 
@@ -1092,6 +1110,142 @@ import { OutputPass } from 'https://esm.sh/three@0.183.0/examples/jsm/postproces
       machineGeometry.getAttribute('aColor').needsUpdate = true;
       machineGeometry.getAttribute('aSize').needsUpdate = true;
       machineGeometry.getAttribute('aAlpha').needsUpdate = true;
+    }
+
+    // ── Satellite layer (factual): a new kind of light, 1957– ──
+    // Approximate active satellites; future values extrapolate the megaconstellation era
+    var SAT_ANCHORS = [
+      [1957, 2], [1960, 30], [1965, 150], [1970, 300], [1980, 450],
+      [1990, 560], [2000, 720], [2010, 1000], [2015, 1400], [2019, 2200],
+      [2021, 4500], [2023, 7800], [2025, 11000], [2035, 25000], [2050, 40000], [2100, 60000]
+    ];
+    var SAT_MAX = 12000;
+    var showSats = true;
+
+    function satCount(year) {
+      if (year < 1957) return 0;
+      var a = SAT_ANCHORS;
+      if (year >= a[a.length-1][0]) return a[a.length-1][1];
+      for (var i = 0; i < a.length - 1; i++) {
+        if (year >= a[i][0] && year < a[i+1][0]) {
+          var f = (year - a[i][0]) / (a[i+1][0] - a[i][0]);
+          return Math.round(a[i][1] + (a[i+1][1] - a[i][1]) * f);
+        }
+      }
+      return 0;
+    }
+
+    // Pre-build all shell slots once; per-year display is just a draw range,
+    // so satellites accumulate instead of reshuffling
+    var satGeometry = new THREE.BufferGeometry();
+    (function buildSats() {
+      var pos = new Float32Array(SAT_MAX * 3);
+      var col = new Float32Array(SAT_MAX * 3);
+      var siz = new Float32Array(SAT_MAX);
+      var alp = new Float32Array(SAT_MAX);
+      var rng = seededRng(424242);
+      var MAX_INCL = Math.sin(65 * DEG2RAD);
+      for (var i = 0; i < SAT_MAX; i++) {
+        var lat = Math.asin((rng() * 2 - 1) * MAX_INCL) / DEG2RAD;
+        var lng = rng() * 360 - 180;
+        var p = polar2Cartesian(lat, lng, 0.06 + rng() * 0.06); // LEO band, above the atmosphere shell
+        pos[i*3] = p[0]; pos[i*3+1] = p[1]; pos[i*3+2] = p[2];
+        var v = 0.8 + rng() * 0.2;
+        col[i*3] = 0.72 * v; col[i*3+1] = 0.80 * v; col[i*3+2] = 0.95 * v;
+        siz[i] = 1.3;
+        alp[i] = 0.5;
+      }
+      satGeometry.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      satGeometry.setAttribute('aColor', new THREE.BufferAttribute(col, 3));
+      satGeometry.setAttribute('aSize', new THREE.BufferAttribute(siz, 1));
+      satGeometry.setAttribute('aAlpha', new THREE.BufferAttribute(alp, 1));
+      satGeometry.setDrawRange(0, 0);
+    })();
+    var satMaterial = makeDotMaterial(0.0);
+    var satPoints = new THREE.Points(satGeometry, satMaterial);
+    (function satOrbit() { // slow shell rotation: the lights that move
+      satPoints.rotation.y = performance.now() / 1000 * 0.03;
+      requestAnimationFrame(satOrbit);
+    })();
+
+    // Returns satellites-per-dot for the legend (0 = layer hidden)
+    function updateSatLayer(year) {
+      if (!showSats || year < 1957) {
+        satGeometry.setDrawRange(0, 0);
+        return 0;
+      }
+      var count = satCount(year);
+      var dots = Math.min(count, SAT_MAX);
+      satGeometry.setDrawRange(0, dots);
+      return Math.max(1, Math.round(count / dots));
+    }
+
+    // ── Cinema mode: day & night ──
+    // A fixed sun; the day side shows Blue Marble, human light appears only in
+    // shadow. The camera's slow orbit carries you across the terminator.
+    var SUN_DIR = (function() {
+      var p = polar2Cartesian(15, -60, 0); // noon over the Caribbean → Asia in night at load
+      return new THREE.Vector3(p[0], p[1], p[2]).normalize();
+    })();
+    var showCinema = false;
+    var cinemaMaterial = null;
+    var origGlobeMaterial = null;
+
+    function buildCinemaMaterial() {
+      var loader = new THREE.TextureLoader();
+      var dayTex = loader.load('blue_marble_day.jpg');
+      var nightTex = loader.load('earth_night_base.jpg');
+      dayTex.colorSpace = THREE.SRGBColorSpace;
+      nightTex.colorSpace = THREE.SRGBColorSpace;
+      return new THREE.ShaderMaterial({
+        uniforms: {
+          uDay: { value: dayTex },
+          uNight: { value: nightTex },
+          uSunDir: { value: SUN_DIR },
+        },
+        vertexShader: [
+          'varying vec2 vUv;',
+          'varying vec3 vWNormal;',
+          'void main() {',
+          '  vUv = uv;',
+          '  vWNormal = normalize(mat3(modelMatrix) * normal);',
+          '  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);',
+          '}',
+        ].join('\n'),
+        fragmentShader: [
+          'uniform sampler2D uDay;',
+          'uniform sampler2D uNight;',
+          'uniform vec3 uSunDir;',
+          'varying vec2 vUv;',
+          'varying vec3 vWNormal;',
+          'void main() {',
+          '  float sd = dot(normalize(vWNormal), uSunDir);',
+          '  float dayAmt = smoothstep(-0.10, 0.15, sd);',
+          '  vec3 day = texture2D(uDay, vUv).rgb;',
+          '  vec3 night = texture2D(uNight, vUv).rgb;',
+          // warm band along the terminator: dawn and dusk
+          '  float band = smoothstep(-0.18, -0.02, sd) * (1.0 - smoothstep(-0.02, 0.25, sd));',
+          '  vec3 col = mix(night * 0.9, day * 0.95, dayAmt);',
+          '  col += day * vec3(1.0, 0.45, 0.22) * band * 0.35;',
+          '  gl_FragColor = vec4(col, 1.0);',
+          '}',
+        ].join('\n'),
+      });
+    }
+
+    function setCinema(on) {
+      showCinema = on;
+      if (on) {
+        if (!cinemaMaterial) cinemaMaterial = buildCinemaMaterial();
+        if (!origGlobeMaterial) origGlobeMaterial = world.globeMaterial();
+        world.globeMaterial(cinemaMaterial);
+      } else if (origGlobeMaterial) {
+        world.globeMaterial(origGlobeMaterial);
+      }
+      [material, machineMaterial].forEach(function(m) {
+        m.uniforms.uSunDir.value.copy(SUN_DIR);
+        m.uniforms.uDayFade.value = on ? 1.0 : 0.0;
+      });
     }
 
     // ── World population helper ──
@@ -1229,6 +1383,9 @@ import { OutputPass } from 'https://esm.sh/three@0.183.0/examples/jsm/postproces
       var legendEl = document.getElementById('legend-label');
       var legendBase = t.dotLegend + (ancient ? t.dotLegendAncient : '');
       if (showMachine && year > 2023) legendBase += '   ' + t.machineLegend;
+      var satPerDot = updateSatLayer(year);
+      if (satPerDot === 1) legendBase += '   ' + t.satLegendOne;
+      else if (satPerDot > 1) legendBase += '   ' + t.satLegendMany.replace('{n}', satPerDot);
       if (showAge && year >= 1950) {
         legendEl.innerHTML = legendBase + '<br>' + t.ageLegend;
       } else {
@@ -1258,6 +1415,9 @@ import { OutputPass } from 'https://esm.sh/three@0.183.0/examples/jsm/postproces
       migrationBtn.style.pointerEvents = inFuture ? '' : 'none';
       machineBtn.style.opacity = inFuture ? '' : '0.3';
       machineBtn.style.pointerEvents = inFuture ? '' : 'none';
+      var satEra = year >= 1957;
+      satBtn.style.opacity = satEra ? '' : '0.3';
+      satBtn.style.pointerEvents = satEra ? '' : 'none';
 
       updateMachineLayer(year);
 
@@ -1324,6 +1484,7 @@ import { OutputPass } from 'https://esm.sh/three@0.183.0/examples/jsm/postproces
       else if (e.key === ' ') { playBtn.click(); e.preventDefault(); }
       else if (e.key === 'r' || e.key === 'R') { rotateBtn.click(); }
       else if (e.key === 's' || e.key === 'S') { enterStory(); }
+      else if (e.key === 'c' || e.key === 'C') { cinemaBtn.click(); }
     });
 
     var playBtn = document.getElementById('play-btn');
@@ -1521,6 +1682,22 @@ import { OutputPass } from 'https://esm.sh/three@0.183.0/examples/jsm/postproces
     machineBtn.addEventListener('click', function() {
       showMachine = !showMachine;
       machineBtn.style.color = showMachine ? '#fff' : '';
+      updateYear(currentYear);
+    });
+
+    // Cinema (day/night) toggle
+    var cinemaBtn = document.getElementById('cinema-btn');
+    cinemaBtn.addEventListener('click', function() {
+      setCinema(!showCinema);
+      cinemaBtn.style.color = showCinema ? '#fff' : '';
+    });
+
+    // Satellite layer toggle (on by default)
+    var satBtn = document.getElementById('sat-btn');
+    satBtn.style.color = '#fff';
+    satBtn.addEventListener('click', function() {
+      showSats = !showSats;
+      satBtn.style.color = showSats ? '#fff' : '';
       updateYear(currentYear);
     });
 
