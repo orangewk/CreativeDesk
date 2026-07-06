@@ -7,7 +7,8 @@ Each dot of light represents 50,000 people. Watch civilizations rise as flickeri
 ## Features
 
 - **12,000-year timeline** — Slide from 10,000 BC to 2100 AD
-- **Story mode** — a guided fable from the first fires to 2100, with camera flights to each chapter's stage (✦ button or `S` key). Chapter 8 changes with the scenario you choose; the epilogue "The Frozen Light" switches on the Ageless scenario and the machine light
+- **Cinematic rendering** — HDR bloom + ACES tonemapping, a physically-inspired atmospheric limb (the "thin blue line"), and a procedural starfield with the Milky Way
+- **Story mode** — a guided fable from the first fires to 2100, with camera flights to each chapter's stage (✦ button or `S` key). Chapter 8 changes with the scenario you choose; the epilogue "The Frozen Light" switches on the Ageless scenario and the machine light; the finale pulls back until Earth is a pale dot among the stars
 - **4 future scenarios** — Linear TFR decline / Stable TFR / Soft landing (floor at 0.8) / Ageless (after 2030 death fades toward accidents-only — and births, tied to deaths in this model, fade with it; the lights stop flickering and freeze)
 - **Machine light layer** — a speculative second layer of cold cyan dots (1 dot = 1 GW) growing where energy and cooling are cheap — Iceland, the Sahara, the Gobi, Atacama — instead of along the rivers and coasts that human light has followed for millennia
 - **Age structure coloring** — Toggle to see aging populations shift from orange to blue-purple
@@ -73,7 +74,8 @@ Full references: [`docs/methodology/data-sources.md`](docs/methodology/data-sour
 ## 機能
 
 - **1万2千年のタイムライン** — 紀元前1万年〜西暦2100年をスライダーで操作
-- **物語モード** — 最初の焚き火から2100年までのガイド付き寓話。各章の舞台へカメラが移動（✦ボタン / `S`キー）。第8章は選択中のシナリオで結末が変わり、終章「凍った光」では不老シナリオと機械の光が灯る
+- **シネマティック描画** — HDRブルーム + ACESトーンマッピング、物理着想の大気の縁光「薄い青い線」、天の川入りプロシージャル星空
+- **物語モード** — 最初の焚き火から2100年までのガイド付き寓話。各章の舞台へカメラが移動（✦ボタン / `S`キー）。第8章は選択中のシナリオで結末が変わり、終章「凍った光」では不老シナリオと機械の光が灯り、最終章では地球が星々のあいだの一粒の光になるまでカメラが引く
 - **4つの未来シナリオ** — 出生率の線形低下 / 固定 / 緩やかな着地（下限0.8）/ 不老（2030年以降、死が事故のみに近づく。このモデルでは出生は死亡に比例するため、出生もともに薄れ、光は揺らぎを止めて凍る）
 - **機械の光レイヤー** — 冷たいシアンの第2レイヤー（1ドット = 1GW・想像）。人類の光が数千年寄り添ってきた川と海岸ではなく、エネルギーと冷却の安い場所——アイスランド、サハラ、ゴビ、アタカマ——に育つ
 - **年齢構成の色分け** — 高齢化する社会がオレンジ→青紫に変化

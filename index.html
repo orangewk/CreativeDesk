@@ -217,6 +217,8 @@
 <script type="module">
 import * as THREE from 'https://esm.sh/three@0.183.0';
 import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
+import { UnrealBloomPass } from 'https://esm.sh/three@0.183.0/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'https://esm.sh/three@0.183.0/examples/jsm/postprocessing/OutputPass.js';
 
   // ── i18n ──
   var urlLang = new URLSearchParams(window.location.search).get('lang');
@@ -269,6 +271,8 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
           text: 'This is one possible 2100 — the one drawn by the scenario selected in settings. Change the scenario, and this ending changes with it. The dots are only a model; the people they stand for will be real. The rest of the story is ours to write.' },
         { title: 'Epilogue: The Frozen Light',
           text: 'One more 2100, if you will. Medicine has slowed death to a whisper, and with it, birth: the lights no longer flicker — they simply stay. And beside them, in places where no fire ever burned, a colder light is growing: the machines. Whether this is a dawn or a dusk, the fable does not say.' },
+        { title: 'A Pale Blue Dot',
+          text: 'Pull back far enough, and the whole story fits in a single glance. Twelve thousand years — every fire, every empire, every plague, every machine — all of it happened on this one grain of light adrift among the stars. For now, it is the only place the story can be told.' },
       ],
     },
     ja: {
@@ -318,6 +322,8 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
           text: 'これは設定のシナリオが描く、ひとつの2100年。シナリオを変えれば、この結末も変わる。ドットはモデルにすぎないが、それが指し示す人々は現実になる。物語の続きを書くのは、わたしたちだ。' },
         { title: '終章：凍った光',
           text: 'もうひとつの2100年を。医学は死を囁きほどに遅くし、それとともに出生も薄れた。光はもう揺らがない——ただ、そこに在り続ける。そしてその傍らで、火が一度も燃えたことのない場所に、冷たい光が育ちはじめている。機械たちだ。これが夜明けなのか黄昏なのか、寓話は語らない。' },
+        { title: 'ペイル・ブルー・ドット',
+          text: '十分に引いて見れば、物語のすべてがひと目に収まる。1万2千年——すべての火も、帝国も、疫病も、機械も——そのすべてが、星々のあいだに漂うこの一粒の光の上で起きた。いまのところ、物語を語れる場所は、ここしかない。' },
       ],
     }
   };
@@ -348,9 +354,8 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
   // ── Globe ──
   var world = new Globe(document.getElementById('globeViz'))
     .globeImageUrl('earth_night_base.jpg')
-    .backgroundImageUrl('//cdn.jsdelivr.net/npm/three-globe/example/img/night-sky.png')
-    .atmosphereColor('rgba(60, 80, 120, 0.3)')
-    .atmosphereAltitude(0.12)
+    .backgroundColor('#000000')  // space is black; the starfield supplies the sky
+    .showAtmosphere(false)       // replaced by the custom limb shader below
     .enablePointerInteraction(false);
 
   world.pointOfView({ lat: 20, lng: 100, altitude: window.innerWidth < 768 ? 3.5 : 2.2 });
@@ -374,9 +379,13 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
     world.width(w).height(h);
     document.body.style.overflowX = (window.innerWidth < MIN_W) ? 'auto' : 'hidden';
     document.body.style.overflowY = (window.innerHeight < MIN_H) ? 'auto' : 'hidden';
-    // Update mobile altitude on orientation change
-    var mobile = window.innerWidth < 768;
-    world.pointOfView({ altitude: mobile ? 3.5 : 2.2 });
+    // Update mobile altitude on orientation change — but never yank the
+    // camera back while it is far out (pale-blue-dot pull-back)
+    var pov = world.pointOfView();
+    if (!pov || pov.altitude < 10) {
+      var mobile = window.innerWidth < 768;
+      world.pointOfView({ altitude: mobile ? 3.5 : 2.2 });
+    }
   }
   onResize();
   window.addEventListener('resize', function() {
@@ -388,11 +397,181 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
   if (controls) {
     controls.autoRotate = true;
     controls.autoRotateSpeed = 0.3;
+    controls.maxDistance = 12000; // allow the pale-blue-dot pull-back
   }
 
   // ── Constants ──
   var GLOBE_RADIUS = 100;
   var DEG2RAD = Math.PI / 180;
+
+  // ── Cinematic light: ACES tonemapping + HDR bloom ──
+  var renderer = world.renderer();
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.1;
+
+  var camera = world.camera();
+  camera.far = 20000; // room for the starfield and the pull-back
+  camera.updateProjectionMatrix();
+
+  var bloomPass = new UnrealBloomPass(
+    new THREE.Vector2(window.innerWidth, window.innerHeight),
+    0.55,  // strength
+    0.2,   // radius: tight, so the atmosphere ring doesn't wash the sky
+    0.4    // threshold: only true light sources bloom — dots stack far above 1
+  );
+  world.postProcessingComposer().addPass(bloomPass);
+  world.postProcessingComposer().addPass(new OutputPass()); // tonemap + sRGB once, at the end
+
+  // ── Atmosphere: the thin blue line ──
+  // A shell shaded by the ray's impact parameter b (distance of the view ray
+  // from the planet center): a bright cyan knife-edge at the surface
+  // silhouette, decaying through blue into violet, plus faint haze over the
+  // disc edge. Replaces globe.gl's uniform atmosphere glow.
+  var ATMO_OUTER = GLOBE_RADIUS * 1.035;
+  var atmoMaterial = new THREE.ShaderMaterial({
+    uniforms: {
+      uC:  { value: new THREE.Vector3() },   // globe center in view space
+      uR0: { value: GLOBE_RADIUS },
+      uR1: { value: ATMO_OUTER },
+    },
+    vertexShader: [
+      'varying vec3 vPos;',
+      'void main() {',
+      '  vPos = (modelViewMatrix * vec4(position, 1.0)).xyz;',
+      '  gl_Position = projectionMatrix * vec4(vPos, 1.0);',
+      '}',
+    ].join('\n'),
+    fragmentShader: [
+      'uniform vec3 uC;',
+      'uniform float uR0;',
+      'uniform float uR1;',
+      'varying vec3 vPos;',
+      'void main() {',
+      '  vec3 rd = normalize(vPos);',
+      '  float b = length(uC - dot(uC, rd) * rd);', // impact parameter
+      '  vec3 col = vec3(0.0);',
+      '  if (b < uR0) {',
+      '    float h = smoothstep(0.86, 1.0, b / uR0);', // haze creeping over the disc edge
+      '    col = vec3(0.30, 0.55, 1.00) * h * 0.10;',
+      '  } else {',
+      '    float x = (b - uR0) / (uR1 - uR0);', // 0 = surface silhouette, 1 = outer edge
+      '    col += vec3(0.65, 0.90, 1.00) * exp(-x * 10.0) * 0.50;', // cyan knife edge
+      '    col += vec3(0.18, 0.38, 0.95) * exp(-x * 3.5) * 0.20;',  // blue body
+      '    col += vec3(0.42, 0.26, 0.75) * exp(-x * 1.5) * 0.05;',  // violet tail
+      '    col *= smoothstep(1.0, 0.9, x);', // clean cutoff at the shell edge
+      '  }',
+      '  gl_FragColor = vec4(col, 1.0);',
+      '}',
+    ].join('\n'),
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  var atmoMesh = new THREE.Mesh(new THREE.SphereGeometry(ATMO_OUTER, 128, 64), atmoMaterial);
+  atmoMesh.renderOrder = 3;
+  atmoMesh.onBeforeRender = function(rndr, scene, cam) {
+    atmoMaterial.uniforms.uC.value.set(0, 0, 0).applyMatrix4(cam.matrixWorldInverse);
+  };
+  world.scene().add(atmoMesh);
+
+  // ── Procedural starfield: sharp stars + the Milky Way band ──
+  var STAR_SHELL = 6000;
+  (function buildStars() {
+    var seed = 20260706;
+    function rng() { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
+    var euler = new THREE.Euler(1.05, 0.35, 0); // galactic band orientation
+    var stars = [];
+
+    function pushStar(dir, size, alpha, warm) {
+      var v = dir.normalize().multiplyScalar(STAR_SHELL);
+      // color by temperature: warm 0 → blue-white, 1 → amber
+      var r = 0.72 + warm * 0.28, g = 0.80 + warm * 0.08, b = 1.0 - warm * 0.42;
+      stars.push({ p: v, r: r, g: g, b: b, size: size, alpha: alpha, tw: rng() * 6.283 });
+    }
+
+    // Field stars, uniform on the sphere
+    for (var i = 0; i < 3200; i++) {
+      var z = rng() * 2 - 1, phi = rng() * 6.283, s = Math.sqrt(1 - z * z);
+      var dir = new THREE.Vector3(s * Math.cos(phi), z, s * Math.sin(phi));
+      var big = rng() < 0.04;
+      pushStar(dir, (big ? 2.6 : 1.0) + rng() * 1.2, 0.25 + rng() * 0.75, rng());
+    }
+    // Milky Way: dense faint stars in a gaussian band
+    for (var i = 0; i < 5200; i++) {
+      var u = rng() * 6.283;
+      var off = (rng() + rng() + rng() - 1.5) * 0.14; // ~gaussian, radians
+      var dir = new THREE.Vector3(Math.cos(u) * Math.cos(off), Math.sin(off), Math.sin(u) * Math.cos(off)).applyEuler(euler);
+      pushStar(dir, 0.6 + rng() * 1.0, 0.10 + rng() * 0.35, rng() * 0.8);
+    }
+    // Diffuse glow: large, very dim sprites along the band
+    for (var i = 0; i < 700; i++) {
+      var u = rng() * 6.283;
+      var off = (rng() + rng() + rng() - 1.5) * 0.15;
+      var dir = new THREE.Vector3(Math.cos(u) * Math.cos(off), Math.sin(off), Math.sin(u) * Math.cos(off)).applyEuler(euler);
+      pushStar(dir, 30 + rng() * 50, 0.004 + rng() * 0.006, 0.25);
+    }
+
+    var n = stars.length;
+    var pos = new Float32Array(n * 3), col = new Float32Array(n * 3);
+    var siz = new Float32Array(n), alp = new Float32Array(n), tw = new Float32Array(n);
+    stars.forEach(function(st, i) {
+      pos[i*3] = st.p.x; pos[i*3+1] = st.p.y; pos[i*3+2] = st.p.z;
+      col[i*3] = st.r; col[i*3+1] = st.g; col[i*3+2] = st.b;
+      siz[i] = st.size; alp[i] = st.alpha; tw[i] = st.tw;
+    });
+    var starGeo = new THREE.BufferGeometry();
+    starGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    starGeo.setAttribute('aColor', new THREE.BufferAttribute(col, 3));
+    starGeo.setAttribute('aSize', new THREE.BufferAttribute(siz, 1));
+    starGeo.setAttribute('aAlpha', new THREE.BufferAttribute(alp, 1));
+    starGeo.setAttribute('aTw', new THREE.BufferAttribute(tw, 1));
+
+    var starMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 },
+        uPR: { value: Math.min(window.devicePixelRatio || 1, 2) },
+      },
+      vertexShader: [
+        'uniform float uTime;',
+        'uniform float uPR;',
+        'attribute vec3 aColor;',
+        'attribute float aSize;',
+        'attribute float aAlpha;',
+        'attribute float aTw;',
+        'varying vec3 vColor;',
+        'varying float vAlpha;',
+        'void main() {',
+        '  vColor = aColor;',
+        '  float twinkle = aSize < 4.0 ? (0.85 + 0.15 * sin(uTime * 1.3 + aTw * 7.0)) : 1.0;',
+        '  vAlpha = aAlpha * twinkle;',
+        '  gl_PointSize = aSize * uPR;', // fixed pixel size: background shell
+        '  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);',
+        '}',
+      ].join('\n'),
+      fragmentShader: [
+        'varying vec3 vColor;',
+        'varying float vAlpha;',
+        'void main() {',
+        '  float d = length(gl_PointCoord - vec2(0.5));',
+        '  if (d > 0.5) discard;',
+        '  float glow = 1.0 - smoothstep(0.0, 0.5, d);',
+        '  glow = glow * glow;',
+        '  gl_FragColor = vec4(vColor * glow, glow * vAlpha);',
+        '}',
+      ].join('\n'),
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    var starPoints = new THREE.Points(starGeo, starMaterial);
+    starPoints.renderOrder = -1;
+    world.scene().add(starPoints);
+
+    (function starLoop() {
+      starMaterial.uniforms.uTime.value = performance.now() / 1000;
+      requestAnimationFrame(starLoop);
+    })();
+  })();
 
   function polar2Cartesian(lat, lng, alt) {
     var phi = (90 - lat) * DEG2RAD;
@@ -1367,6 +1546,7 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
       { year: 2023,   lat: 24, lng: 90,  alt: 2.2 },  // South/East Asia
       { year: 2100,   lat: 20, lng: 100, alt: 2.5 },  // wide view, the open ending
       { year: 2100,   lat: 55, lng: -25, alt: 2.1, preset: 'frozen' },  // N Atlantic: Iceland's machine light
+      { year: 2100,   lat: 15, lng: 30,  alt: 58, dur: 6000 },          // the pale blue dot
     ];
 
     var storyMode = false;
@@ -1408,7 +1588,8 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
         slider.value = idx;
         updateYear(currentYear);
       }
-      world.pointOfView({ lat: geo.lat, lng: geo.lng, altitude: chapterAltitude(geo.alt) }, 2200);
+      var alt = geo.alt > 10 ? geo.alt : chapterAltitude(geo.alt); // pull-back needs no mobile boost
+      world.pointOfView({ lat: geo.lat, lng: geo.lng, altitude: alt }, geo.dur || 2200);
 
       // Fade text out, swap, fade back in
       storyInner.style.opacity = 0;
@@ -1451,6 +1632,11 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
       if (controls) controls.autoRotate = storyWasRotating;
       storyBtn.style.color = '';
       storyCard.classList.remove('visible');
+      // If the story left us in deep space, come home
+      var pov = world.pointOfView();
+      if (pov && pov.altitude > 10) {
+        world.pointOfView({ altitude: window.innerWidth < 768 ? 3.5 : 2.2 }, 2500);
+      }
     }
 
     storyBtn.addEventListener('click', function() {
