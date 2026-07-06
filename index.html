@@ -199,11 +199,13 @@
     <button class="speed-btn scenario-btn active" data-scenario="linear" data-tip="TFR continues current decline to zero">Linear</button>
     <button class="speed-btn scenario-btn" data-scenario="stable" data-tip="TFR stays at 2023 level">Stable</button>
     <button class="speed-btn scenario-btn" data-scenario="soft" data-tip="TFR decline slows, floor at 0.8">Soft</button>
+    <button class="speed-btn scenario-btn" data-scenario="ageless" data-tip="Aging slows after 2030">Ageless</button>
   </div>
   <div class="settings-group">
     <span class="settings-label">Display</span>
     <button class="speed-btn" id="age-btn">Age color</button>
     <button class="speed-btn" id="migration-btn">Migration</button>
+    <button class="speed-btn" id="machine-btn">Machine</button>
   </div>
   <div style="margin-top:4px; font-size:0.6rem; opacity:0.3;" id="shortcuts-label"></div>
   <div class="settings-group" style="margin-top:2px;">
@@ -231,6 +233,10 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
       tipLinear: 'TFR continues current decline to zero',
       tipStable: 'TFR stays at 2023 level',
       tipSoft: 'TFR decline slows, floor at 0.8',
+      tipAgeless: 'Aging slows after 2030 — death fades to accidents only, and births fade with it',
+      scenarioAgeless: 'Ageless: after 2030 death fades to accidents only — and births fade with it',
+      machine: 'Machine',
+      machineLegend: '<span style="color:#66ddff;">●</span> = 1 GW <small>(machine light, speculative)</small>',
       speed: 'Speed',
       scenario: 'Scenario',
       display: 'Display',
@@ -261,6 +267,8 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
           text: 'Eight billion. Yet across most of the world, fertility has fallen below replacement. The number of children on Earth may already have peaked. What comes next is not yet written.' },
         { title: 'An Open Ending',
           text: 'This is one possible 2100 — the one drawn by the scenario selected in settings. Change the scenario, and this ending changes with it. The dots are only a model; the people they stand for will be real. The rest of the story is ours to write.' },
+        { title: 'Epilogue: The Frozen Light',
+          text: 'One more 2100, if you will. Medicine has slowed death to a whisper, and with it, birth: the lights no longer flicker — they simply stay. And beside them, in places where no fire ever burned, a colder light is growing: the machines. Whether this is a dawn or a dusk, the fable does not say.' },
       ],
     },
     ja: {
@@ -274,6 +282,10 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
       tipLinear: '\u51FA\u751F\u7387\u304C\u73FE\u5728\u306E\u4E0B\u964D\u30DA\u30FC\u30B9\u3067\u7D9A\u304F\uFF08\u5E8A=0\uFF09',
       tipStable: '\u51FA\u751F\u7387\u304C2023\u5E74\u306E\u5024\u3067\u56FA\u5B9A',
       tipSoft: '\u51FA\u751F\u7387\u306E\u4F4E\u4E0B\u304C\u7DE9\u3084\u304B\u306B\u306A\u308A 0.8\u3067\u4E0B\u3052\u6B62\u307E\u308B',
+      tipAgeless: '2030\u5E74\u4EE5\u964D\u3001\u8001\u5316\u304C\u6E1B\u901F\u3002\u6B7B\u306F\u4E8B\u6545\u3060\u3051\u306B\u8FD1\u3065\u304D\u3001\u51FA\u751F\u3082\u3068\u3082\u306B\u8584\u308C\u308B',
+      scenarioAgeless: '\u4E0D\u8001\uFF1A2030\u5E74\u4EE5\u964D\u3001\u6B7B\u306F\u4E8B\u6545\u3060\u3051\u306B\u8FD1\u3065\u304D\u3001\u51FA\u751F\u3082\u3068\u3082\u306B\u8584\u308C\u3066\u3044\u304F',
+      machine: '\u6A5F\u68B0\u306E\u5149',
+      machineLegend: '<span style="color:#66ddff;">\u25CF</span> = 1 GW <small>\uFF08\u6A5F\u68B0\u306E\u5149\u30FB\u60F3\u50CF\uFF09</small>',
       speed: '\u901F\u5EA6',
       scenario: '\u30B7\u30CA\u30EA\u30AA',
       display: '\u8868\u793A',
@@ -304,6 +316,8 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
           text: '80億人。しかし世界の大半で、出生率はすでに人口を維持できる水準を下回った。地球上の子どもの数は、もうピークを過ぎたかもしれない。この先はまだ書かれていない。' },
         { title: '開かれた結末',
           text: 'これは設定のシナリオが描く、ひとつの2100年。シナリオを変えれば、この結末も変わる。ドットはモデルにすぎないが、それが指し示す人々は現実になる。物語の続きを書くのは、わたしたちだ。' },
+        { title: '終章：凍った光',
+          text: 'もうひとつの2100年を。医学は死を囁きほどに遅くし、それとともに出生も薄れた。光はもう揺らがない——ただ、そこに在り続ける。そしてその傍らで、火が一度も燃えたことのない場所に、冷たい光が育ちはじめている。機械たちだ。これが夜明けなのか黄昏なのか、寓話は語らない。' },
       ],
     }
   };
@@ -317,6 +331,7 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
   });
   document.getElementById('age-btn').textContent = t.ageColor;
   document.getElementById('migration-btn').textContent = t.migration;
+  document.getElementById('machine-btn').textContent = t.machine;
   document.getElementById('rotate-btn').textContent = t.rotate;
   document.querySelectorAll('.scenario-btn').forEach(function(btn) {
     btn.setAttribute('data-tip', t['tip' + btn.dataset.scenario.charAt(0).toUpperCase() + btn.dataset.scenario.slice(1)]);
@@ -454,11 +469,27 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
     // ── Shared TFR calculation ──
     function calcYearTfr(tfr0, slope, scenario, yr) {
       if (scenario === 'stable') return tfr0;
-      if (scenario === 'soft') {
+      if (scenario === 'soft' || scenario === 'ageless') {
+        // Ageless reuses the soft-landing fertility curve; its signature is
+        // in the death rate, not the TFR
         var elapsed = yr - 2023;
         return Math.max(0.8, tfr0 + slope * elapsed * Math.exp(-0.03 * elapsed));
       }
       return Math.max(0, tfr0 + slope * (yr - 2023));
+    }
+
+    // ── Shared death-rate calculation ──
+    // Ageless: from 2030 senescence slows ~4%/yr, so mortality decays toward
+    // an accidents-only floor (~0.05%/yr ≈ a 2,000-year effective life).
+    // Because birthRate ∝ deathRate in this model, births fade with deaths:
+    // a world that stops dying is also a world that stops being replaced.
+    var AGELESS_START = 2030;
+    var AGELESS_DECAY = 0.96;
+    var ACCIDENT_DEATH_RATE = 0.0005;
+    function calcYearDeathRate(le, scenario, yr) {
+      var base = 1 / le;
+      if (scenario !== 'ageless' || yr <= AGELESS_START) return base;
+      return Math.max(ACCIDENT_DEATH_RATE, base * Math.pow(AGELESS_DECAY, yr - AGELESS_START));
     }
 
     // ── Migration engine ──
@@ -571,7 +602,7 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
           var tfr0 = m.t, slope = m.s, le = m.l, im = m.i;
           var popCap = m.p * 3;
           var yearTfr = calcYearTfr(tfr0, slope, scenario, yr);
-          var deathRate = 1 / le;
+          var deathRate = calcYearDeathRate(le, scenario, yr);
           var birthRate = deathRate * (yearTfr / 2.1) * (1 - im);
           var newPop = pop[code] * (1 + birthRate - deathRate);
           naturalPop[code] = Math.max(0, Math.min(newPop, popCap));
@@ -635,7 +666,7 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
         var m = modelData[src];
         if (!m || !pop[src]) return;
         var yearTfr = calcYearTfr(m.t, m.s, scenario, year);
-        var deathRate = 1 / m.l;
+        var deathRate = calcYearDeathRate(m.l, scenario, year);
         var birthRate = deathRate * (yearTfr / 2.1) * (1 - m.i);
         var newPop = pop[src] * (1 + birthRate - deathRate);
         var surplus = Math.max(0, newPop - pop[src]);
@@ -713,12 +744,7 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
     geometry.setDrawRange(0, 0);
 
     // ── Shader with wobble for ancient dots ──
-    var material = new THREE.ShaderMaterial({
-      uniforms: {
-        uTime: { value: 0.0 },
-        uWobble: { value: 1.0 }  // 1.0 = full wobble (ancient), 0.0 = none (modern)
-      },
-      vertexShader: [
+    var DOT_VERTEX_SHADER = [
         'uniform float uTime;',
         'uniform float uWobble;',
         'attribute vec3 aColor;',
@@ -739,8 +765,8 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
         '  gl_PointSize = clamp(aSize * (200.0 / -mvPosition.z), 1.0, 64.0);',
         '  gl_Position = projectionMatrix * mvPosition;',
         '}',
-      ].join('\n'),
-      fragmentShader: [
+    ].join('\n');
+    var DOT_FRAGMENT_SHADER = [
         'varying vec3 vColor;',
         'varying float vAlpha;',
         'void main() {',
@@ -750,13 +776,40 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
         '  glow = glow * glow;',
         '  gl_FragColor = vec4(vColor * glow, glow * vAlpha);',
         '}',
-      ].join('\n'),
-      transparent: true,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-    });
+    ].join('\n');
 
+    function makeDotMaterial(wobble) {
+      return new THREE.ShaderMaterial({
+        uniforms: {
+          uTime: { value: 0.0 },
+          uWobble: { value: wobble }  // 1.0 = full wobble (ancient), 0.0 = none
+        },
+        vertexShader: DOT_VERTEX_SHADER,
+        fragmentShader: DOT_FRAGMENT_SHADER,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      });
+    }
+
+    var material = makeDotMaterial(1.0);
     var pointCloud = new THREE.Points(geometry, material);
+
+    // ── Machine light layer (speculative): 1 dot = 1 GW ──
+    // Machine light follows energy and cooling, not rivers and coasts
+    var MACHINE_MAX = 6200;
+    var machinePositions = new Float32Array(MACHINE_MAX * 3);
+    var machineColors = new Float32Array(MACHINE_MAX * 3);
+    var machineSizes = new Float32Array(MACHINE_MAX);
+    var machineAlphas = new Float32Array(MACHINE_MAX);
+    var machineGeometry = new THREE.BufferGeometry();
+    machineGeometry.setAttribute('position', new THREE.BufferAttribute(machinePositions, 3));
+    machineGeometry.setAttribute('aColor', new THREE.BufferAttribute(machineColors, 3));
+    machineGeometry.setAttribute('aSize', new THREE.BufferAttribute(machineSizes, 1));
+    machineGeometry.setAttribute('aAlpha', new THREE.BufferAttribute(machineAlphas, 1));
+    machineGeometry.setDrawRange(0, 0);
+    var machineMaterial = makeDotMaterial(0.0); // machine light never flickers
+    var machinePoints = new THREE.Points(machineGeometry, machineMaterial);
 
     // Add to ThreeGlobe
     setTimeout(function() {
@@ -765,8 +818,102 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
         if (!found && obj.type === 'Group' && obj.children.length > 5) found = obj;
       });
       (found || world.scene()).add(pointCloud);
+      (found || world.scene()).add(machinePoints);
       console.log('Points added');
     }, 500);
+
+    // ── Machine light sites: cheap energy + cooling + fiber ──
+    // {lat, lng, w: growth weight, s: spread in degrees}
+    var MACHINE_SITES = [
+      { lat: 64.1, lng: -21.9, w: 3, s: 1.2 },  // Iceland (geothermal)
+      { lat: 69.6, lng: 18.9,  w: 2, s: 1.5 },  // N Norway (hydro, arctic cooling)
+      { lat: 65.6, lng: 20.2,  w: 2, s: 1.5 },  // N Sweden
+      { lat: 64.5, lng: 26.0,  w: 2, s: 1.5 },  // Finland
+      { lat: 66.9, lng: -50.7, w: 1, s: 1.2 },  // Greenland
+      { lat: 57.5, lng: -3.8,  w: 1, s: 1.2 },  // Scotland (wind)
+      { lat: 53.3, lng: -8.0,  w: 2, s: 1.0 },  // Ireland
+      { lat: 48.5, lng: -72.0, w: 4, s: 2.5 },  // Quebec (hydro)
+      { lat: 50.4, lng: -89.0, w: 2, s: 2.5 },  // Ontario/Manitoba
+      { lat: 45.8, lng: -120.5, w: 3, s: 1.8 }, // Columbia River
+      { lat: 36.8, lng: -115.5, w: 3, s: 1.8 }, // Nevada (solar)
+      { lat: 31.8, lng: -100.5, w: 4, s: 2.5 }, // Texas
+      { lat: 42.5, lng: -94.5, w: 2, s: 2.2 },  // Midwest (wind)
+      { lat: 38.9, lng: -77.5, w: 3, s: 1.2 },  // N Virginia (existing hub)
+      { lat: 37.8, lng: -4.8,  w: 2, s: 1.8 },  // S Spain (solar)
+      { lat: 30.5, lng: -6.5,  w: 3, s: 2.2 },  // Morocco Sahara
+      { lat: 28.0, lng: 3.0,   w: 2, s: 2.5 },  // Algeria Sahara
+      { lat: 27.5, lng: 30.5,  w: 2, s: 2.0 },  // Egypt
+      { lat: 24.5, lng: 44.0,  w: 3, s: 2.5 },  // Saudi Arabia
+      { lat: 24.2, lng: 54.5,  w: 2, s: 1.2 },  // UAE
+      { lat: -23.5, lng: 15.5, w: 2, s: 2.0 },  // Namib desert
+      { lat: 0.5,  lng: 36.2,  w: 1, s: 1.2 },  // Kenya (Rift geothermal)
+      { lat: -24.2, lng: -69.3, w: 3, s: 1.8 }, // Atacama (solar)
+      { lat: -47.0, lng: -70.5, w: 1, s: 2.0 }, // Patagonia (wind)
+      { lat: -21.5, lng: 118.8, w: 3, s: 2.5 }, // Pilbara
+      { lat: -31.5, lng: 137.5, w: 2, s: 2.5 }, // S Australia
+      { lat: 43.5, lng: 105.0, w: 3, s: 3.0 },  // Gobi
+      { lat: 42.0, lng: 88.5,  w: 2, s: 2.8 },  // Xinjiang
+      { lat: 47.5, lng: 66.5,  w: 2, s: 2.8 },  // Kazakhstan
+      { lat: 54.5, lng: 103.5, w: 2, s: 2.5 },  // Siberia (hydro)
+      { lat: 62.5, lng: 129.8, w: 1, s: 2.0 },  // Yakutia
+      { lat: 27.0, lng: 71.5,  w: 2, s: 2.0 },  // Rajasthan (solar)
+      { lat: 43.5, lng: 142.5, w: 1, s: 1.2 },  // Hokkaido
+    ];
+    var MACHINE_TOTAL_W = MACHINE_SITES.reduce(function(sum, s) { return sum + s.w; }, 0);
+
+    var showMachine = false;
+
+    // Total machine GW: ~60 GW in 2025, doubling every 12 years (speculative)
+    function machineGW(year) {
+      return Math.min(MACHINE_MAX, Math.round(60 * Math.pow(2, (year - 2025) / 12)));
+    }
+
+    // Per-site RNG is seeded by site only, so each year's dots are a prefix
+    // of the next year's: the light grows instead of reshuffling
+    var machineDotCache = {};
+    function generateMachineDots(year) {
+      var key = String(year);
+      if (machineDotCache[key]) return machineDotCache[key];
+      var total = machineGW(year);
+      var result = [];
+      MACHINE_SITES.forEach(function(site, si) {
+        var n = Math.round(total * site.w / MACHINE_TOTAL_W);
+        var rng = seededRng(si * 7919 + 17);
+        for (var i = 0; i < n; i++) {
+          var dlat = (rng() + rng() - 1) * site.s;
+          var dlng = (rng() + rng() - 1) * site.s * 1.6;
+          result.push([site.lat + dlat, site.lng + dlng]);
+        }
+      });
+      machineDotCache[key] = result;
+      return result;
+    }
+
+    function updateMachineLayer(year) {
+      if (!showMachine || year <= 2023) {
+        machineGeometry.setDrawRange(0, 0);
+        return;
+      }
+      var dots = generateMachineDots(year);
+      var n = Math.min(dots.length, MACHINE_MAX);
+      for (var i = 0; i < n; i++) {
+        var pos = polar2Cartesian(dots[i][0], dots[i][1], 0.004);
+        machinePositions[i*3]   = pos[0];
+        machinePositions[i*3+1] = pos[1];
+        machinePositions[i*3+2] = pos[2];
+        var v = 0.85 + (i % 4) * 0.05; // slight per-dot brightness variation
+        machineColors[i*3]   = 0.35 * v;
+        machineColors[i*3+1] = 0.85 * v;
+        machineColors[i*3+2] = 1.0 * v;
+        machineSizes[i] = 2.2;
+        machineAlphas[i] = 0.9;
+      }
+      machineGeometry.setDrawRange(0, n);
+      machineGeometry.getAttribute('position').needsUpdate = true;
+      machineGeometry.getAttribute('aColor').needsUpdate = true;
+      machineGeometry.getAttribute('aSize').needsUpdate = true;
+      machineGeometry.getAttribute('aAlpha').needsUpdate = true;
+    }
 
     // ── World population helper ──
     function getWorldPop(year) {
@@ -814,7 +961,12 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
 
       // Era: ancient (<1800) vs modern (>=1800)
       var ancient = (year < 1800);
-      material.uniforms.uWobble.value = 1.0;
+      // Ageless future: the flicker of mortality fades out — frozen light
+      var wobble = 1.0;
+      if (year > 2023 && currentScenario === 'ageless') {
+        wobble = Math.max(0, 1 - Math.max(0, year - AGELESS_START) / 40);
+      }
+      material.uniforms.uWobble.value = wobble;
 
       // Color
       var fireR = 1.0, fireG = 0.3, fireB = 0.05;
@@ -836,7 +988,7 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
           var targetYear = Math.min(year, 2100);
           for (var yr = 2024; yr <= targetYear; yr++) {
             var yearTfr = Math.max(0, tfr + slope * (yr - 2023));
-            var deathRate = 1 / le;
+            var deathRate = calcYearDeathRate(le, currentScenario, yr);
             var fertilityRatio = yearTfr / 2.1;
             var births = (working + young * 0.3) * deathRate * fertilityRatio * (1 - im);
             var youngToWork = young / 15;
@@ -897,10 +1049,11 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
       document.getElementById('year-label').textContent = formatYear(Math.round(year));
       var legendEl = document.getElementById('legend-label');
       var legendBase = t.dotLegend + (ancient ? t.dotLegendAncient : '');
+      if (showMachine && year > 2023) legendBase += '   ' + t.machineLegend;
       if (showAge && year >= 1950) {
         legendEl.innerHTML = legendBase + '<br>' + t.ageLegend;
       } else {
-        legendEl.textContent = legendBase;
+        legendEl.innerHTML = legendBase;
       }
 
       var worldPop;
@@ -908,6 +1061,8 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
         var migPop = computeAllFuturePop(year, currentScenario);
         worldPop = 0;
         COUNTRY_CODES.forEach(function(code) { worldPop += migPop[code] || 0; });
+      } else if (year > 2023) {
+        worldPop = getFutureWorldPop(year, currentScenario);
       } else {
         worldPop = getWorldPop(year);
       }
@@ -922,6 +1077,10 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
       });
       migrationBtn.style.opacity = inFuture ? '' : '0.3';
       migrationBtn.style.pointerEvents = inFuture ? '' : 'none';
+      machineBtn.style.opacity = inFuture ? '' : '0.3';
+      machineBtn.style.pointerEvents = inFuture ? '' : 'none';
+
+      updateMachineLayer(year);
 
       // ── Migration flow arcs ──
       if (showMigration && year > 2023) {
@@ -1017,10 +1176,11 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
       requestAnimationFrame(animate);
     }
 
-    // Speed buttons
-    document.querySelectorAll('.speed-btn:not(.scenario-btn)').forEach(function(btn) {
+    // Speed buttons (data-speed only: age/migration/machine/lang share the
+    // .speed-btn style but must not receive this handler)
+    document.querySelectorAll('.speed-btn[data-speed]').forEach(function(btn) {
       btn.addEventListener('click', function() {
-        document.querySelectorAll('.speed-btn:not(.scenario-btn)').forEach(function(b) { b.classList.remove('active'); });
+        document.querySelectorAll('.speed-btn[data-speed]').forEach(function(b) { b.classList.remove('active'); });
         btn.classList.add('active');
         speed = parseInt(btn.dataset.speed);
       });
@@ -1056,12 +1216,26 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
       var popCap = pop * 3;
       for (var yr = 2024; yr <= year; yr++) {
         var yearTfr = calcYearTfr(m.t, m.s, scenario, yr);
-        var deathRate = 1 / m.l;
+        var deathRate = calcYearDeathRate(m.l, scenario, yr);
         var birthRate = deathRate * (yearTfr / REPLACEMENT_TFR) * (1 - m.i);
         pop = pop * (1 + birthRate - deathRate);
         pop = Math.max(0, Math.min(pop, popCap));
       }
       return pop;
+    }
+
+    // World total for future years (pop_history ends at 2023)
+    var futureWorldPopCache = {};
+    function getFutureWorldPop(year, scenario) {
+      var key = scenario + '_' + year;
+      if (futureWorldPopCache[key]) return futureWorldPopCache[key];
+      var total = 0;
+      COUNTRY_CODES.forEach(function(code) {
+        var m = modelData[code];
+        if (m) total += computeFuturePop(m, year, scenario);
+      });
+      futureWorldPopCache[key] = total;
+      return total;
     }
 
     // Get 2023 dot positions per country (from allDots['2023'] or nearest)
@@ -1121,6 +1295,7 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
       linear: t.scenarioLinear,
       stable: t.scenarioStable,
       soft:   t.scenarioSoft,
+      ageless: t.scenarioAgeless,
     };
     document.querySelectorAll('.scenario-btn').forEach(function(btn) {
       btn.addEventListener('click', function() {
@@ -1130,6 +1305,7 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
         futureDotCache = {};
         migrationPopCache = {};
         migrationFlowCache = {};
+        futureWorldPopCache = {};
         infoLabel.textContent = SCENARIOS[currentScenario];
         updateYear(currentYear);
       });
@@ -1161,6 +1337,14 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
       updateYear(currentYear);
     });
 
+    // Machine light toggle
+    var machineBtn = document.getElementById('machine-btn');
+    machineBtn.addEventListener('click', function() {
+      showMachine = !showMachine;
+      machineBtn.style.color = showMachine ? '#fff' : '';
+      updateYear(currentYear);
+    });
+
     // Rotate toggle
     var rotateBtn = document.getElementById('rotate-btn');
     var rotating = true;
@@ -1182,6 +1366,7 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
       { year: 1950,   lat: 22, lng: 45,  alt: 2.4 },  // wide view
       { year: 2023,   lat: 24, lng: 90,  alt: 2.2 },  // South/East Asia
       { year: 2100,   lat: 20, lng: 100, alt: 2.5 },  // wide view, the open ending
+      { year: 2100,   lat: 55, lng: -25, alt: 2.1, preset: 'frozen' },  // N Atlantic: Iceland's machine light
     ];
 
     var storyMode = false;
@@ -1207,6 +1392,15 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
     function showChapter(i) {
       storyIdx = i;
       var geo = STORY_GEO[i];
+      // Epilogue: switch on the ageless scenario + machine light. Deliberately
+      // left on after the story ends — the epilogue hands you the scenario.
+      if (geo.preset === 'frozen') {
+        if (currentScenario !== 'ageless') {
+          var agelessBtn = document.querySelector('.scenario-btn[data-scenario="ageless"]');
+          if (agelessBtn) agelessBtn.click();
+        }
+        if (!showMachine) machineBtn.click();
+      }
       var idx = TIMELINE.indexOf(geo.year);
       if (idx >= 0) {
         currentIdx = idx;
