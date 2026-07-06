@@ -7,6 +7,7 @@ Each dot of light represents 50,000 people. Watch civilizations rise as flickeri
 ## Features
 
 - **12,000-year timeline** — Slide from 10,000 BC to 2100 AD
+- **Story mode** — an 8-chapter guided fable from the first fires to 2100, with camera flights to each chapter's stage (✦ button or `S` key). The final chapter changes with the scenario you choose
 - **3 future scenarios** — Linear TFR decline / Stable TFR / Soft landing (floor at 0.8)
 - **Age structure coloring** — Toggle to see aging populations shift from orange to blue-purple
 - **Migration flow arcs** — Gravity model with GDP attraction and language bonuses (2024+)
@@ -71,6 +72,7 @@ Full references: [`docs/methodology/data-sources.md`](docs/methodology/data-sour
 ## 機能
 
 - **1万2千年のタイムライン** — 紀元前1万年〜西暦2100年をスライダーで操作
+- **物語モード** — 最初の焚き火から2100年まで、8章のガイド付き寓話。各章の舞台へカメラが移動（✦ボタン / `S`キー）。最終章は選択中のシナリオで結末が変わる
 - **3つの未来シナリオ** — 出生率の線形低下 / 固定 / 緩やかな着地（下限0.8）
 - **年齢構成の色分け** — 高齢化する社会がオレンジ→青紫に変化
 - **移民フロー** — GDP引力+言語ボーナスの重力モデル（2024年以降）

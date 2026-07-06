@@ -71,6 +71,37 @@
   .settings-group { display: flex; align-items: center; gap: 8px; }
   .settings-label { font-size: 0.65rem; opacity: 0.4; min-width: 55px; text-align: right; }
 
+  .story-card {
+    position: fixed; bottom: 96px; left: 50%; transform: translateX(-50%);
+    z-index: 20; width: min(560px, calc(100vw - 32px));
+    background: rgba(0,0,0,0.55); backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.12); border-radius: 14px;
+    padding: 18px 22px 14px; box-sizing: border-box;
+    opacity: 0; pointer-events: none; transition: opacity 0.5s;
+  }
+  .story-card.visible { opacity: 1; pointer-events: auto; }
+  .story-inner { transition: opacity 0.35s; }
+  .story-chapter { font-size: 0.6rem; letter-spacing: 0.25em; text-transform: uppercase; opacity: 0.35; }
+  .story-title { font-size: 1.05rem; font-weight: 300; letter-spacing: 0.12em; margin: 6px 0 8px; }
+  .story-text { font-size: 0.82rem; font-weight: 300; line-height: 1.75; opacity: 0.85; }
+  .story-nav { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; }
+  .story-nav-btn {
+    background: none; border: 1px solid rgba(255,255,255,0.25); color: #fff;
+    border-radius: 16px; padding: 4px 16px; font-size: 0.72rem; cursor: pointer;
+  }
+  .story-nav-btn:hover { border-color: rgba(255,255,255,0.7); }
+  .story-nav-btn:disabled { opacity: 0.25; cursor: default; }
+  .story-progress { display: flex; gap: 6px; }
+  .story-progress span {
+    width: 5px; height: 5px; border-radius: 50%; background: rgba(255,255,255,0.25);
+  }
+  .story-progress span.active { background: rgba(255,255,255,0.9); }
+  .story-close {
+    position: absolute; top: 6px; right: 10px; background: none; border: none;
+    color: rgba(255,255,255,0.4); font-size: 1rem; cursor: pointer; padding: 4px;
+  }
+  .story-close:hover { color: #fff; }
+
   .loading {
     position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
     background: #000; z-index: 100; transition: opacity 0.5s;
@@ -98,6 +129,10 @@
     }
 
     .scenario-btn::after { display: none; }
+
+    .story-card { bottom: 84px; padding: 14px 16px 12px; }
+    .story-title { font-size: 0.95rem; }
+    .story-text { font-size: 0.78rem; line-height: 1.65; }
   }
 
   /* ── Small mobile (<400px) ── */
@@ -126,6 +161,7 @@
     <div class="controls">
       <button class="play-btn" id="play-btn" title="Play / Pause (Space)">&#9654;</button>
       <input type="range" id="year-slider" min="0" max="100" value="0" step="1" style="flex:1; min-width:150px;">
+      <button class="play-btn" id="story-btn" title="Story (S)" style="font-size:12px;">&#10022;</button>
       <button class="play-btn" id="rotate-btn" title="Rotate (R)" style="font-size:11px;">&#x21BB;</button>
       <button class="play-btn" id="settings-btn" title="Settings" style="font-size:13px;">&#9881;</button>
     </div>
@@ -134,6 +170,20 @@
   <div class="footer-info">
     <span id="info-label"></span>
     <span id="legend-label" style="margin-left:8px;"></span>
+  </div>
+</div>
+
+<div id="story-card" class="story-card">
+  <button class="story-close" id="story-close">&times;</button>
+  <div class="story-inner" id="story-inner">
+    <div class="story-chapter" id="story-chapter"></div>
+    <div class="story-title" id="story-title"></div>
+    <div class="story-text" id="story-text"></div>
+  </div>
+  <div class="story-nav">
+    <button class="story-nav-btn" id="story-prev"></button>
+    <div class="story-progress" id="story-progress"></div>
+    <button class="story-nav-btn" id="story-next"></button>
   </div>
 </div>
 
@@ -190,6 +240,28 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
       ageLegend: '<span style="color:#ff6600;">\u25CF</span><small> ~5%</small> <span style="color:#ddcc00;">\u25CF</span><small> ~20%</small> <span style="color:#44cc88;">\u25CF</span><small> ~30%</small> <span style="color:#4488dd;">\u25CF</span><small> ~45%</small> <span style="color:#8855cc;">\u25CF</span><small> ~60%</small> <span style="cursor:help;opacity:0.5;" title="Share of population aged 65+">(65+ %)</span>',
       migration: 'Migration',
       langBtn: 'JA',
+      storyBack: '← Back',
+      storyNext: 'Next →',
+      storyFin: 'Fin',
+      storyChapterLabel: 'A Short Fable of Humankind — ',
+      story: [
+        { title: 'The First Fires',
+          text: 'Twelve thousand years ago, every light on Earth is firelight. Some four million humans live in small bands, just discovering that seeds placed in the ground come back. (Light placement is estimated.)' },
+        { title: 'The First Cities',
+          text: 'Along the Tigris and Euphrates, villages fuse into something new: the city. Uruk holds tens of thousands — more humans in one place than ever before. Writing is invented to count them.' },
+        { title: 'The Age of Empires',
+          text: 'Rome in the west, Han China in the east: two empires hold nearly half of the roughly 230 million people alive. The lights hug the rivers and coasts — as they will for the next two thousand years.' },
+        { title: 'The Great Dying',
+          text: 'The Black Death has just taken one in three Europeans and ravaged Asia. It is one of the few moments in history when humanity’s lights truly dimmed. They come back — so far, they always have.' },
+        { title: 'The Machine Age',
+          text: 'Around now, humanity passes one billion. In Britain, coal begins to do the work of muscle. Within a century, firelight turns electric, and the curve bends upward like never before.' },
+        { title: 'The Great Acceleration',
+          text: '2.5 billion people, and childhood death is collapsing everywhere. Within a single human lifetime from here, population will triple — faster than our species has ever grown, or likely ever will.' },
+        { title: 'The Crest of the Wave',
+          text: 'Eight billion. Yet across most of the world, fertility has fallen below replacement. The number of children on Earth may already have peaked. What comes next is not yet written.' },
+        { title: 'An Open Ending',
+          text: 'This is one possible 2100 — the one drawn by the scenario selected in settings. Change the scenario, and this ending changes with it. The dots are only a model; the people they stand for will be real. The rest of the story is ours to write.' },
+      ],
     },
     ja: {
       title: 'HUMANS OF EARTH',
@@ -211,6 +283,28 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
       ageLegend: '<span style="color:#ff6600;">\u25CF</span><small> ~5%</small> <span style="color:#ddcc00;">\u25CF</span><small> ~20%</small> <span style="color:#44cc88;">\u25CF</span><small> ~30%</small> <span style="color:#4488dd;">\u25CF</span><small> ~45%</small> <span style="color:#8855cc;">\u25CF</span><small> ~60%</small> <span style="cursor:help;opacity:0.5;" title="65\u6B73\u4EE5\u4E0A\u4EBA\u53E3\u306E\u5272\u5408">(65+ %)</span>',
       migration: '移民フロー',
       langBtn: 'EN',
+      storyBack: '← 戻る',
+      storyNext: '次へ →',
+      storyFin: 'おわり',
+      storyChapterLabel: '人類の小さな寓話 — ',
+      story: [
+        { title: '最初の火',
+          text: 'いまから1万2千年前。地球上のすべての光は、焚き火の光。およそ400万人の人類が小さな群れで暮らし、地面に蒔いた種が戻ってくることを発見しつつある。（光の配置は推定）' },
+        { title: '最初の都市',
+          text: 'ティグリスとユーフラテスのほとりで、村々が融け合ってまったく新しいもの——都市——が生まれる。ウルクには数万人。ひとつの場所にこれほど多くの人間が集まったことは、かつてなかった。彼らを数えるために、文字が発明される。' },
+        { title: '帝国の時代',
+          text: '西にローマ、東に漢。ふたつの帝国が、当時のおよそ2.3億人の半分近くを抱える。光は川と海岸に寄り添う——この先2千年もそうであり続けるように。' },
+        { title: '大いなる死',
+          text: '黒死病がヨーロッパの3人に1人を奪い、アジアをも荒廃させた直後。人類の光が実際に暗くなった、歴史上数少ない瞬間。それでも光は戻ってくる——少なくとも、これまでは。' },
+        { title: '機械の時代',
+          text: 'このころ、人類は10億人を超える。イギリスでは石炭が筋肉の代わりに働きはじめる。焚き火の光は1世紀のうちに電気の光へ変わり、曲線はかつてない角度で上を向く。' },
+        { title: '大加速',
+          text: '25億人。世界中で子どもの死が急速に減っていく。ここから人ひとりの一生のあいだに、人口は3倍になる——人類がかつて経験したことのない、そしておそらく二度と経験しない速さで。' },
+        { title: '波の頂',
+          text: '80億人。しかし世界の大半で、出生率はすでに人口を維持できる水準を下回った。地球上の子どもの数は、もうピークを過ぎたかもしれない。この先はまだ書かれていない。' },
+        { title: '開かれた結末',
+          text: 'これは設定のシナリオが描く、ひとつの2100年。シナリオを変えれば、この結末も変わる。ドットはモデルにすぎないが、それが指し示す人々は現実になる。物語の続きを書くのは、わたしたちだ。' },
+      ],
     }
   };
   var t = I18N[LANG];
@@ -866,6 +960,7 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
     var TICK_INTERVAL = 300;
 
     slider.addEventListener('input', function() {
+      if (storyMode) exitStory();
       currentIdx = parseInt(slider.value);
       currentYear = TIMELINE[currentIdx];
       updateYear(currentYear);
@@ -880,10 +975,17 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
 
     // Keyboard controls
     document.addEventListener('keydown', function(e) {
+      if (storyMode) {
+        if (e.key === 'ArrowLeft') { storyStep(-1); e.preventDefault(); }
+        else if (e.key === 'ArrowRight' || e.key === ' ') { storyStep(1); e.preventDefault(); }
+        else if (e.key === 'Escape' || e.key === 's' || e.key === 'S') { exitStory(); }
+        return;
+      }
       if (e.key === 'ArrowLeft') { stepBy(-1); e.preventDefault(); }
       else if (e.key === 'ArrowRight') { stepBy(1); e.preventDefault(); }
       else if (e.key === ' ') { playBtn.click(); e.preventDefault(); }
       else if (e.key === 'r' || e.key === 'R') { rotateBtn.click(); }
+      else if (e.key === 's' || e.key === 'S') { enterStory(); }
     });
 
     var playBtn = document.getElementById('play-btn');
@@ -1068,6 +1170,101 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
       if (controls) controls.autoRotate = rotating;
       rotateBtn.style.color = rotating ? '#fff' : '';
     });
+
+    // ── Story mode: a guided fable in 8 chapters ──
+    // Camera geo per chapter; narrative text lives in I18N[lang].story
+    var STORY_GEO = [
+      { year: -10000, lat: 34, lng: 40,  alt: 1.7 },  // Fertile Crescent
+      { year: -3000,  lat: 31, lng: 45,  alt: 1.4 },  // Mesopotamia
+      { year: 0,      lat: 35, lng: 65,  alt: 2.3 },  // Rome <-> Han, wide
+      { year: 1400,   lat: 46, lng: 12,  alt: 1.6 },  // Europe after the plague
+      { year: 1800,   lat: 52, lng: -1,  alt: 1.5 },  // Britain
+      { year: 1950,   lat: 22, lng: 45,  alt: 2.4 },  // wide view
+      { year: 2023,   lat: 24, lng: 90,  alt: 2.2 },  // South/East Asia
+      { year: 2100,   lat: 20, lng: 100, alt: 2.5 },  // wide view, the open ending
+    ];
+
+    var storyMode = false;
+    var storyIdx = 0;
+    var storyWasRotating = false;
+    var storyCard = document.getElementById('story-card');
+    var storyInner = document.getElementById('story-inner');
+    var storyPrevBtn = document.getElementById('story-prev');
+    var storyNextBtn = document.getElementById('story-next');
+    var storyProgress = document.getElementById('story-progress');
+    var storyBtn = document.getElementById('story-btn');
+
+    // Progress dots (one per chapter)
+    STORY_GEO.forEach(function() {
+      storyProgress.appendChild(document.createElement('span'));
+    });
+    storyPrevBtn.textContent = t.storyBack;
+
+    function chapterAltitude(alt) {
+      return window.innerWidth < 768 ? alt + 1.2 : alt;
+    }
+
+    function showChapter(i) {
+      storyIdx = i;
+      var geo = STORY_GEO[i];
+      var idx = TIMELINE.indexOf(geo.year);
+      if (idx >= 0) {
+        currentIdx = idx;
+        currentYear = geo.year;
+        slider.value = idx;
+        updateYear(currentYear);
+      }
+      world.pointOfView({ lat: geo.lat, lng: geo.lng, altitude: chapterAltitude(geo.alt) }, 2200);
+
+      // Fade text out, swap, fade back in
+      storyInner.style.opacity = 0;
+      setTimeout(function() {
+        var ch = t.story[i];
+        document.getElementById('story-chapter').textContent = t.storyChapterLabel + (i + 1) + ' / ' + STORY_GEO.length;
+        document.getElementById('story-title').textContent = ch.title;
+        document.getElementById('story-text').textContent = ch.text;
+        storyInner.style.opacity = 1;
+      }, 350);
+
+      storyPrevBtn.disabled = (i === 0);
+      storyNextBtn.textContent = (i === STORY_GEO.length - 1) ? t.storyFin : t.storyNext;
+      storyProgress.querySelectorAll('span').forEach(function(dot, j) {
+        dot.classList.toggle('active', j === i);
+      });
+    }
+
+    function storyStep(delta) {
+      var next = storyIdx + delta;
+      if (next >= STORY_GEO.length) { exitStory(); return; }
+      if (next < 0) return;
+      showChapter(next);
+    }
+
+    function enterStory() {
+      if (storyMode) return;
+      storyMode = true;
+      if (playing) playBtn.click(); // pause timeline playback
+      storyWasRotating = rotating;
+      if (controls) controls.autoRotate = false;
+      storyBtn.style.color = '#fff';
+      storyCard.classList.add('visible');
+      showChapter(0);
+    }
+
+    function exitStory() {
+      if (!storyMode) return;
+      storyMode = false;
+      if (controls) controls.autoRotate = storyWasRotating;
+      storyBtn.style.color = '';
+      storyCard.classList.remove('visible');
+    }
+
+    storyBtn.addEventListener('click', function() {
+      storyMode ? exitStory() : enterStory();
+    });
+    storyNextBtn.addEventListener('click', function() { storyStep(1); });
+    storyPrevBtn.addEventListener('click', function() { storyStep(-1); });
+    document.getElementById('story-close').addEventListener('click', exitStory);
 
     // Wobble animation
     function wobbleLoop() {
