@@ -71,6 +71,37 @@
   .settings-group { display: flex; align-items: center; gap: 8px; }
   .settings-label { font-size: 0.65rem; opacity: 0.4; min-width: 55px; text-align: right; }
 
+  .story-card {
+    position: fixed; bottom: 96px; left: 50%; transform: translateX(-50%);
+    z-index: 20; width: min(560px, calc(100vw - 32px));
+    background: rgba(0,0,0,0.55); backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.12); border-radius: 14px;
+    padding: 18px 22px 14px; box-sizing: border-box;
+    opacity: 0; pointer-events: none; transition: opacity 0.5s;
+  }
+  .story-card.visible { opacity: 1; pointer-events: auto; }
+  .story-inner { transition: opacity 0.35s; }
+  .story-chapter { font-size: 0.6rem; letter-spacing: 0.25em; text-transform: uppercase; opacity: 0.35; }
+  .story-title { font-size: 1.05rem; font-weight: 300; letter-spacing: 0.12em; margin: 6px 0 8px; }
+  .story-text { font-size: 0.82rem; font-weight: 300; line-height: 1.75; opacity: 0.85; }
+  .story-nav { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; }
+  .story-nav-btn {
+    background: none; border: 1px solid rgba(255,255,255,0.25); color: #fff;
+    border-radius: 16px; padding: 4px 16px; font-size: 0.72rem; cursor: pointer;
+  }
+  .story-nav-btn:hover { border-color: rgba(255,255,255,0.7); }
+  .story-nav-btn:disabled { opacity: 0.25; cursor: default; }
+  .story-progress { display: flex; gap: 6px; }
+  .story-progress span {
+    width: 5px; height: 5px; border-radius: 50%; background: rgba(255,255,255,0.25);
+  }
+  .story-progress span.active { background: rgba(255,255,255,0.9); }
+  .story-close {
+    position: absolute; top: 6px; right: 10px; background: none; border: none;
+    color: rgba(255,255,255,0.4); font-size: 1rem; cursor: pointer; padding: 4px;
+  }
+  .story-close:hover { color: #fff; }
+
   .loading {
     position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
     background: #000; z-index: 100; transition: opacity 0.5s;
@@ -98,6 +129,10 @@
     }
 
     .scenario-btn::after { display: none; }
+
+    .story-card { bottom: 84px; padding: 14px 16px 12px; }
+    .story-title { font-size: 0.95rem; }
+    .story-text { font-size: 0.78rem; line-height: 1.65; }
   }
 
   /* ── Small mobile (<400px) ── */
@@ -126,6 +161,7 @@
     <div class="controls">
       <button class="play-btn" id="play-btn" title="Play / Pause (Space)">&#9654;</button>
       <input type="range" id="year-slider" min="0" max="100" value="0" step="1" style="flex:1; min-width:150px;">
+      <button class="play-btn" id="story-btn" title="Story (S)" style="font-size:12px;">&#10022;</button>
       <button class="play-btn" id="rotate-btn" title="Rotate (R)" style="font-size:11px;">&#x21BB;</button>
       <button class="play-btn" id="settings-btn" title="Settings" style="font-size:13px;">&#9881;</button>
     </div>
@@ -134,6 +170,20 @@
   <div class="footer-info">
     <span id="info-label"></span>
     <span id="legend-label" style="margin-left:8px;"></span>
+  </div>
+</div>
+
+<div id="story-card" class="story-card">
+  <button class="story-close" id="story-close">&times;</button>
+  <div class="story-inner" id="story-inner">
+    <div class="story-chapter" id="story-chapter"></div>
+    <div class="story-title" id="story-title"></div>
+    <div class="story-text" id="story-text"></div>
+  </div>
+  <div class="story-nav">
+    <button class="story-nav-btn" id="story-prev"></button>
+    <div class="story-progress" id="story-progress"></div>
+    <button class="story-nav-btn" id="story-next"></button>
   </div>
 </div>
 
@@ -149,11 +199,18 @@
     <button class="speed-btn scenario-btn active" data-scenario="linear" data-tip="TFR continues current decline to zero">Linear</button>
     <button class="speed-btn scenario-btn" data-scenario="stable" data-tip="TFR stays at 2023 level">Stable</button>
     <button class="speed-btn scenario-btn" data-scenario="soft" data-tip="TFR decline slows, floor at 0.8">Soft</button>
+    <button class="speed-btn scenario-btn" data-scenario="ageless" data-tip="Aging slows after 2030">Ageless</button>
   </div>
   <div class="settings-group">
     <span class="settings-label">Display</span>
     <button class="speed-btn" id="age-btn">Age color</button>
-    <button class="speed-btn" id="migration-btn">Migration</button>
+    <!-- Migration: unpublished for now — the flow model is insufficient
+         (surplus-only sources collapse to ~1 country). Engine code retained
+         below but not user-reachable. Re-expose by removing display:none. -->
+    <button class="speed-btn" id="migration-btn" style="display:none;">Migration</button>
+    <button class="speed-btn" id="machine-btn">Machine</button>
+    <button class="speed-btn" id="cinema-btn">Day/Night</button>
+    <button class="speed-btn" id="sat-btn">Satellites</button>
   </div>
   <div style="margin-top:4px; font-size:0.6rem; opacity:0.3;" id="shortcuts-label"></div>
   <div class="settings-group" style="margin-top:2px;">
@@ -165,6 +222,8 @@
 <script type="module">
 import * as THREE from 'https://esm.sh/three@0.183.0';
 import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
+import { UnrealBloomPass } from 'https://esm.sh/three@0.183.0/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'https://esm.sh/three@0.183.0/examples/jsm/postprocessing/OutputPass.js';
 
   // ── i18n ──
   var urlLang = new URLSearchParams(window.location.search).get('lang');
@@ -181,6 +240,14 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
       tipLinear: 'TFR continues current decline to zero',
       tipStable: 'TFR stays at 2023 level',
       tipSoft: 'TFR decline slows, floor at 0.8',
+      tipAgeless: 'Aging slows after 2030 — death fades to accidents only, and births fade with it',
+      scenarioAgeless: 'Ageless: after 2030 death fades to accidents only — and births fade with it',
+      machine: 'Machine',
+      machineLegend: '<span style="color:#66ddff;">●</span> = 1 GW <small>(machine light, speculative)</small>',
+      cinema: 'Day/Night',
+      satellites: 'Satellites',
+      satLegendOne: '<span style="color:#aaccff;">●</span> = 1 satellite',
+      satLegendMany: '<span style="color:#aaccff;">●</span> = {n} satellites',
       speed: 'Speed',
       scenario: 'Scenario',
       display: 'Display',
@@ -190,6 +257,32 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
       ageLegend: '<span style="color:#ff6600;">\u25CF</span><small> ~5%</small> <span style="color:#ddcc00;">\u25CF</span><small> ~20%</small> <span style="color:#44cc88;">\u25CF</span><small> ~30%</small> <span style="color:#4488dd;">\u25CF</span><small> ~45%</small> <span style="color:#8855cc;">\u25CF</span><small> ~60%</small> <span style="cursor:help;opacity:0.5;" title="Share of population aged 65+">(65+ %)</span>',
       migration: 'Migration',
       langBtn: 'JA',
+      storyBack: '← Back',
+      storyNext: 'Next →',
+      storyFin: 'Fin',
+      storyChapterLabel: 'A Short Fable of Humankind — ',
+      story: [
+        { title: 'The First Fires',
+          text: 'Twelve thousand years ago, every light on Earth is firelight. Some four million humans live in small bands, just discovering that seeds placed in the ground come back. (Light placement is estimated.)' },
+        { title: 'The First Cities',
+          text: 'Along the Tigris and Euphrates, villages fuse into something new: the city. Uruk holds tens of thousands — more humans in one place than ever before. Writing is invented to count them.' },
+        { title: 'The Age of Empires',
+          text: 'Rome in the west, Han China in the east: two empires hold nearly half of the roughly 230 million people alive. The lights hug the rivers and coasts — as they will for the next two thousand years.' },
+        { title: 'The Great Dying',
+          text: 'The Black Death has just taken one in three Europeans and ravaged Asia. It is one of the few moments in history when humanity’s lights truly dimmed. They come back — so far, they always have.' },
+        { title: 'The Machine Age',
+          text: 'Around now, humanity passes one billion. In Britain, coal begins to do the work of muscle. Within a century, firelight turns electric, and the curve bends upward like never before.' },
+        { title: 'The Great Acceleration',
+          text: '2.5 billion people, and childhood death is collapsing everywhere. Within a single human lifetime from here, population will triple — faster than our species has ever grown, or likely ever will.' },
+        { title: 'The Crest of the Wave',
+          text: 'Eight billion. Yet across most of the world, fertility has fallen below replacement. The number of children on Earth may already have peaked. What comes next is not yet written.' },
+        { title: 'An Open Ending',
+          text: 'This is one possible 2100 — the one drawn by the scenario selected in settings. Change the scenario, and this ending changes with it. The dots are only a model; the people they stand for will be real. The rest of the story is ours to write.' },
+        { title: 'Epilogue: The Frozen Light',
+          text: 'One more 2100, if you will. Medicine has slowed death to a whisper, and with it, birth: the lights no longer flicker — they simply stay. And beside them, in places where no fire ever burned, a colder light is growing: the machines. Whether this is a dawn or a dusk, the fable does not say.' },
+        { title: 'A Pale Blue Dot',
+          text: 'Pull back far enough, and the whole story fits in a single glance. Twelve thousand years — every fire, every empire, every plague, every machine — all of it happened on this one grain of light adrift among the stars. For now, it is the only place the story can be told.' },
+      ],
     },
     ja: {
       title: 'HUMANS OF EARTH',
@@ -202,6 +295,14 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
       tipLinear: '\u51FA\u751F\u7387\u304C\u73FE\u5728\u306E\u4E0B\u964D\u30DA\u30FC\u30B9\u3067\u7D9A\u304F\uFF08\u5E8A=0\uFF09',
       tipStable: '\u51FA\u751F\u7387\u304C2023\u5E74\u306E\u5024\u3067\u56FA\u5B9A',
       tipSoft: '\u51FA\u751F\u7387\u306E\u4F4E\u4E0B\u304C\u7DE9\u3084\u304B\u306B\u306A\u308A 0.8\u3067\u4E0B\u3052\u6B62\u307E\u308B',
+      tipAgeless: '2030\u5E74\u4EE5\u964D\u3001\u8001\u5316\u304C\u6E1B\u901F\u3002\u6B7B\u306F\u4E8B\u6545\u3060\u3051\u306B\u8FD1\u3065\u304D\u3001\u51FA\u751F\u3082\u3068\u3082\u306B\u8584\u308C\u308B',
+      scenarioAgeless: '\u4E0D\u8001\uFF1A2030\u5E74\u4EE5\u964D\u3001\u6B7B\u306F\u4E8B\u6545\u3060\u3051\u306B\u8FD1\u3065\u304D\u3001\u51FA\u751F\u3082\u3068\u3082\u306B\u8584\u308C\u3066\u3044\u304F',
+      machine: '\u6A5F\u68B0\u306E\u5149',
+      machineLegend: '<span style="color:#66ddff;">\u25CF</span> = 1 GW <small>\uFF08\u6A5F\u68B0\u306E\u5149\u30FB\u60F3\u50CF\uFF09</small>',
+      cinema: '\u663C\u3068\u591C',
+      satellites: '\u885B\u661F',
+      satLegendOne: '<span style="color:#aaccff;">\u25CF</span> = \u885B\u661F1\u57FA',
+      satLegendMany: '<span style="color:#aaccff;">\u25CF</span> = \u885B\u661F{n}\u57FA',
       speed: '\u901F\u5EA6',
       scenario: '\u30B7\u30CA\u30EA\u30AA',
       display: '\u8868\u793A',
@@ -211,6 +312,32 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
       ageLegend: '<span style="color:#ff6600;">\u25CF</span><small> ~5%</small> <span style="color:#ddcc00;">\u25CF</span><small> ~20%</small> <span style="color:#44cc88;">\u25CF</span><small> ~30%</small> <span style="color:#4488dd;">\u25CF</span><small> ~45%</small> <span style="color:#8855cc;">\u25CF</span><small> ~60%</small> <span style="cursor:help;opacity:0.5;" title="65\u6B73\u4EE5\u4E0A\u4EBA\u53E3\u306E\u5272\u5408">(65+ %)</span>',
       migration: '移民フロー',
       langBtn: 'EN',
+      storyBack: '← 戻る',
+      storyNext: '次へ →',
+      storyFin: 'おわり',
+      storyChapterLabel: '人類の小さな寓話 — ',
+      story: [
+        { title: '最初の火',
+          text: 'いまから1万2千年前。地球上のすべての光は、焚き火の光。およそ400万人の人類が小さな群れで暮らし、地面に蒔いた種が戻ってくることを発見しつつある。（光の配置は推定）' },
+        { title: '最初の都市',
+          text: 'ティグリスとユーフラテスのほとりで、村々が融け合ってまったく新しいもの——都市——が生まれる。ウルクには数万人。ひとつの場所にこれほど多くの人間が集まったことは、かつてなかった。彼らを数えるために、文字が発明される。' },
+        { title: '帝国の時代',
+          text: '西にローマ、東に漢。ふたつの帝国が、当時のおよそ2.3億人の半分近くを抱える。光は川と海岸に寄り添う——この先2千年もそうであり続けるように。' },
+        { title: '大いなる死',
+          text: '黒死病がヨーロッパの3人に1人を奪い、アジアをも荒廃させた直後。人類の光が実際に暗くなった、歴史上数少ない瞬間。それでも光は戻ってくる——少なくとも、これまでは。' },
+        { title: '機械の時代',
+          text: 'このころ、人類は10億人を超える。イギリスでは石炭が筋肉の代わりに働きはじめる。焚き火の光は1世紀のうちに電気の光へ変わり、曲線はかつてない角度で上を向く。' },
+        { title: '大加速',
+          text: '25億人。世界中で子どもの死が急速に減っていく。ここから人ひとりの一生のあいだに、人口は3倍になる——人類がかつて経験したことのない、そしておそらく二度と経験しない速さで。' },
+        { title: '波の頂',
+          text: '80億人。しかし世界の大半で、出生率はすでに人口を維持できる水準を下回った。地球上の子どもの数は、もうピークを過ぎたかもしれない。この先はまだ書かれていない。' },
+        { title: '開かれた結末',
+          text: 'これは設定のシナリオが描く、ひとつの2100年。シナリオを変えれば、この結末も変わる。ドットはモデルにすぎないが、それが指し示す人々は現実になる。物語の続きを書くのは、わたしたちだ。' },
+        { title: '終章：凍った光',
+          text: 'もうひとつの2100年を。医学は死を囁きほどに遅くし、それとともに出生も薄れた。光はもう揺らがない——ただ、そこに在り続ける。そしてその傍らで、火が一度も燃えたことのない場所に、冷たい光が育ちはじめている。機械たちだ。これが夜明けなのか黄昏なのか、寓話は語らない。' },
+        { title: 'ペイル・ブルー・ドット',
+          text: '十分に引いて見れば、物語のすべてがひと目に収まる。1万2千年——すべての火も、帝国も、疫病も、機械も——そのすべてが、星々のあいだに漂うこの一粒の光の上で起きた。いまのところ、物語を語れる場所は、ここしかない。' },
+      ],
     }
   };
   var t = I18N[LANG];
@@ -223,6 +350,9 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
   });
   document.getElementById('age-btn').textContent = t.ageColor;
   document.getElementById('migration-btn').textContent = t.migration;
+  document.getElementById('machine-btn').textContent = t.machine;
+  document.getElementById('cinema-btn').textContent = t.cinema;
+  document.getElementById('sat-btn').textContent = t.satellites;
   document.getElementById('rotate-btn').textContent = t.rotate;
   document.querySelectorAll('.scenario-btn').forEach(function(btn) {
     btn.setAttribute('data-tip', t['tip' + btn.dataset.scenario.charAt(0).toUpperCase() + btn.dataset.scenario.slice(1)]);
@@ -239,9 +369,8 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
   // ── Globe ──
   var world = new Globe(document.getElementById('globeViz'))
     .globeImageUrl('earth_night_base.jpg')
-    .backgroundImageUrl('//cdn.jsdelivr.net/npm/three-globe/example/img/night-sky.png')
-    .atmosphereColor('rgba(60, 80, 120, 0.3)')
-    .atmosphereAltitude(0.12)
+    .backgroundColor('#000000')  // space is black; the starfield supplies the sky
+    .showAtmosphere(false)       // replaced by the custom limb shader below
     .enablePointerInteraction(false);
 
   world.pointOfView({ lat: 20, lng: 100, altitude: window.innerWidth < 768 ? 3.5 : 2.2 });
@@ -265,9 +394,13 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
     world.width(w).height(h);
     document.body.style.overflowX = (window.innerWidth < MIN_W) ? 'auto' : 'hidden';
     document.body.style.overflowY = (window.innerHeight < MIN_H) ? 'auto' : 'hidden';
-    // Update mobile altitude on orientation change
-    var mobile = window.innerWidth < 768;
-    world.pointOfView({ altitude: mobile ? 3.5 : 2.2 });
+    // Update mobile altitude on orientation change — but never yank the
+    // camera back while it is far out (pale-blue-dot pull-back)
+    var pov = world.pointOfView();
+    if (!pov || pov.altitude < 10) {
+      var mobile = window.innerWidth < 768;
+      world.pointOfView({ altitude: mobile ? 3.5 : 2.2 });
+    }
   }
   onResize();
   window.addEventListener('resize', function() {
@@ -279,11 +412,181 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
   if (controls) {
     controls.autoRotate = true;
     controls.autoRotateSpeed = 0.3;
+    controls.maxDistance = 12000; // allow the pale-blue-dot pull-back
   }
 
   // ── Constants ──
   var GLOBE_RADIUS = 100;
   var DEG2RAD = Math.PI / 180;
+
+  // ── Cinematic light: ACES tonemapping + HDR bloom ──
+  var renderer = world.renderer();
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.1;
+
+  var camera = world.camera();
+  camera.far = 20000; // room for the starfield and the pull-back
+  camera.updateProjectionMatrix();
+
+  var bloomPass = new UnrealBloomPass(
+    new THREE.Vector2(window.innerWidth, window.innerHeight),
+    0.55,  // strength
+    0.2,   // radius: tight, so the atmosphere ring doesn't wash the sky
+    0.4    // threshold: only true light sources bloom — dots stack far above 1
+  );
+  world.postProcessingComposer().addPass(bloomPass);
+  world.postProcessingComposer().addPass(new OutputPass()); // tonemap + sRGB once, at the end
+
+  // ── Atmosphere: the thin blue line ──
+  // A shell shaded by the ray's impact parameter b (distance of the view ray
+  // from the planet center): a bright cyan knife-edge at the surface
+  // silhouette, decaying through blue into violet, plus faint haze over the
+  // disc edge. Replaces globe.gl's uniform atmosphere glow.
+  var ATMO_OUTER = GLOBE_RADIUS * 1.035;
+  var atmoMaterial = new THREE.ShaderMaterial({
+    uniforms: {
+      uC:  { value: new THREE.Vector3() },   // globe center in view space
+      uR0: { value: GLOBE_RADIUS },
+      uR1: { value: ATMO_OUTER },
+    },
+    vertexShader: [
+      'varying vec3 vPos;',
+      'void main() {',
+      '  vPos = (modelViewMatrix * vec4(position, 1.0)).xyz;',
+      '  gl_Position = projectionMatrix * vec4(vPos, 1.0);',
+      '}',
+    ].join('\n'),
+    fragmentShader: [
+      'uniform vec3 uC;',
+      'uniform float uR0;',
+      'uniform float uR1;',
+      'varying vec3 vPos;',
+      'void main() {',
+      '  vec3 rd = normalize(vPos);',
+      '  float b = length(uC - dot(uC, rd) * rd);', // impact parameter
+      '  vec3 col = vec3(0.0);',
+      '  if (b < uR0) {',
+      '    float h = smoothstep(0.86, 1.0, b / uR0);', // haze creeping over the disc edge
+      '    col = vec3(0.30, 0.55, 1.00) * h * 0.10;',
+      '  } else {',
+      '    float x = (b - uR0) / (uR1 - uR0);', // 0 = surface silhouette, 1 = outer edge
+      '    col += vec3(0.65, 0.90, 1.00) * exp(-x * 10.0) * 0.50;', // cyan knife edge
+      '    col += vec3(0.18, 0.38, 0.95) * exp(-x * 3.5) * 0.20;',  // blue body
+      '    col += vec3(0.42, 0.26, 0.75) * exp(-x * 1.5) * 0.05;',  // violet tail
+      '    col *= smoothstep(1.0, 0.9, x);', // clean cutoff at the shell edge
+      '  }',
+      '  gl_FragColor = vec4(col, 1.0);',
+      '}',
+    ].join('\n'),
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  var atmoMesh = new THREE.Mesh(new THREE.SphereGeometry(ATMO_OUTER, 128, 64), atmoMaterial);
+  atmoMesh.renderOrder = 3;
+  atmoMesh.onBeforeRender = function(rndr, scene, cam) {
+    atmoMaterial.uniforms.uC.value.set(0, 0, 0).applyMatrix4(cam.matrixWorldInverse);
+  };
+  world.scene().add(atmoMesh);
+
+  // ── Procedural starfield: sharp stars + the Milky Way band ──
+  var STAR_SHELL = 6000;
+  (function buildStars() {
+    var seed = 20260706;
+    function rng() { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
+    var euler = new THREE.Euler(1.05, 0.35, 0); // galactic band orientation
+    var stars = [];
+
+    function pushStar(dir, size, alpha, warm) {
+      var v = dir.normalize().multiplyScalar(STAR_SHELL);
+      // color by temperature: warm 0 → blue-white, 1 → amber
+      var r = 0.72 + warm * 0.28, g = 0.80 + warm * 0.08, b = 1.0 - warm * 0.42;
+      stars.push({ p: v, r: r, g: g, b: b, size: size, alpha: alpha, tw: rng() * 6.283 });
+    }
+
+    // Field stars, uniform on the sphere
+    for (var i = 0; i < 3200; i++) {
+      var z = rng() * 2 - 1, phi = rng() * 6.283, s = Math.sqrt(1 - z * z);
+      var dir = new THREE.Vector3(s * Math.cos(phi), z, s * Math.sin(phi));
+      var big = rng() < 0.04;
+      pushStar(dir, (big ? 2.6 : 1.0) + rng() * 1.2, 0.25 + rng() * 0.75, rng());
+    }
+    // Milky Way: dense faint stars in a gaussian band
+    for (var i = 0; i < 5200; i++) {
+      var u = rng() * 6.283;
+      var off = (rng() + rng() + rng() - 1.5) * 0.14; // ~gaussian, radians
+      var dir = new THREE.Vector3(Math.cos(u) * Math.cos(off), Math.sin(off), Math.sin(u) * Math.cos(off)).applyEuler(euler);
+      pushStar(dir, 0.6 + rng() * 1.0, 0.10 + rng() * 0.35, rng() * 0.8);
+    }
+    // Diffuse glow: large, very dim sprites along the band
+    for (var i = 0; i < 700; i++) {
+      var u = rng() * 6.283;
+      var off = (rng() + rng() + rng() - 1.5) * 0.15;
+      var dir = new THREE.Vector3(Math.cos(u) * Math.cos(off), Math.sin(off), Math.sin(u) * Math.cos(off)).applyEuler(euler);
+      pushStar(dir, 30 + rng() * 50, 0.004 + rng() * 0.006, 0.25);
+    }
+
+    var n = stars.length;
+    var pos = new Float32Array(n * 3), col = new Float32Array(n * 3);
+    var siz = new Float32Array(n), alp = new Float32Array(n), tw = new Float32Array(n);
+    stars.forEach(function(st, i) {
+      pos[i*3] = st.p.x; pos[i*3+1] = st.p.y; pos[i*3+2] = st.p.z;
+      col[i*3] = st.r; col[i*3+1] = st.g; col[i*3+2] = st.b;
+      siz[i] = st.size; alp[i] = st.alpha; tw[i] = st.tw;
+    });
+    var starGeo = new THREE.BufferGeometry();
+    starGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    starGeo.setAttribute('aColor', new THREE.BufferAttribute(col, 3));
+    starGeo.setAttribute('aSize', new THREE.BufferAttribute(siz, 1));
+    starGeo.setAttribute('aAlpha', new THREE.BufferAttribute(alp, 1));
+    starGeo.setAttribute('aTw', new THREE.BufferAttribute(tw, 1));
+
+    var starMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 },
+        uPR: { value: Math.min(window.devicePixelRatio || 1, 2) },
+      },
+      vertexShader: [
+        'uniform float uTime;',
+        'uniform float uPR;',
+        'attribute vec3 aColor;',
+        'attribute float aSize;',
+        'attribute float aAlpha;',
+        'attribute float aTw;',
+        'varying vec3 vColor;',
+        'varying float vAlpha;',
+        'void main() {',
+        '  vColor = aColor;',
+        '  float twinkle = aSize < 4.0 ? (0.85 + 0.15 * sin(uTime * 1.3 + aTw * 7.0)) : 1.0;',
+        '  vAlpha = aAlpha * twinkle;',
+        '  gl_PointSize = aSize * uPR;', // fixed pixel size: background shell
+        '  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);',
+        '}',
+      ].join('\n'),
+      fragmentShader: [
+        'varying vec3 vColor;',
+        'varying float vAlpha;',
+        'void main() {',
+        '  float d = length(gl_PointCoord - vec2(0.5));',
+        '  if (d > 0.5) discard;',
+        '  float glow = 1.0 - smoothstep(0.0, 0.5, d);',
+        '  glow = glow * glow;',
+        '  gl_FragColor = vec4(vColor * glow, glow * vAlpha);',
+        '}',
+      ].join('\n'),
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    var starPoints = new THREE.Points(starGeo, starMaterial);
+    starPoints.renderOrder = -1;
+    world.scene().add(starPoints);
+
+    (function starLoop() {
+      starMaterial.uniforms.uTime.value = performance.now() / 1000;
+      requestAnimationFrame(starLoop);
+    })();
+  })();
 
   function polar2Cartesian(lat, lng, alt) {
     var phi = (90 - lat) * DEG2RAD;
@@ -360,11 +663,27 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
     // ── Shared TFR calculation ──
     function calcYearTfr(tfr0, slope, scenario, yr) {
       if (scenario === 'stable') return tfr0;
-      if (scenario === 'soft') {
+      if (scenario === 'soft' || scenario === 'ageless') {
+        // Ageless reuses the soft-landing fertility curve; its signature is
+        // in the death rate, not the TFR
         var elapsed = yr - 2023;
         return Math.max(0.8, tfr0 + slope * elapsed * Math.exp(-0.03 * elapsed));
       }
       return Math.max(0, tfr0 + slope * (yr - 2023));
+    }
+
+    // ── Shared death-rate calculation ──
+    // Ageless: from 2030 senescence slows ~4%/yr, so mortality decays toward
+    // an accidents-only floor (~0.05%/yr ≈ a 2,000-year effective life).
+    // Because birthRate ∝ deathRate in this model, births fade with deaths:
+    // a world that stops dying is also a world that stops being replaced.
+    var AGELESS_START = 2030;
+    var AGELESS_DECAY = 0.96;
+    var ACCIDENT_DEATH_RATE = 0.0005;
+    function calcYearDeathRate(le, scenario, yr) {
+      var base = 1 / le;
+      if (scenario !== 'ageless' || yr <= AGELESS_START) return base;
+      return Math.max(ACCIDENT_DEATH_RATE, base * Math.pow(AGELESS_DECAY, yr - AGELESS_START));
     }
 
     // ── Migration engine ──
@@ -462,22 +781,40 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
 
       // Initialize with 2023 populations
       var pop = {};
-      COUNTRY_CODES.forEach(function(code) {
-        var m = modelData[code];
-        if (m) pop[code] = m.p;
-      });
+      var startYr = 2024;
+      // Resume from the nearest cached intermediate year <= targetYear
+      var resumed = false;
+      for (var cy = targetYear; cy >= 2024; cy--) {
+        var cached = migrationPopCache[scenario + '_' + cy];
+        if (cached) {
+          pop = Object.assign({}, cached);
+          startYr = cy + 1;
+          resumed = true;
+          break;
+        }
+      }
+      if (!resumed) {
+        COUNTRY_CODES.forEach(function(code) {
+          var m = modelData[code];
+          if (m) pop[code] = m.p;
+        });
+      }
 
-      for (var yr = 2024; yr <= targetYear; yr++) {
+      for (var yr = startYr; yr <= targetYear; yr++) {
         // ① Natural growth (same as computeFuturePop)
         var naturalPop = {};
         var surplus = {};
         COUNTRY_CODES.forEach(function(code) {
           var m = modelData[code];
-          if (!m || !pop[code]) return;
+          if (!m || !pop[code]) {
+            naturalPop[code] = pop[code] || 0;
+            surplus[code] = 0;
+            return;
+          }
           var tfr0 = m.t, slope = m.s, le = m.l, im = m.i;
           var popCap = m.p * 3;
           var yearTfr = calcYearTfr(tfr0, slope, scenario, yr);
-          var deathRate = 1 / le;
+          var deathRate = calcYearDeathRate(le, scenario, yr);
           var birthRate = deathRate * (yearTfr / 2.1) * (1 - im);
           var newPop = pop[code] * (1 + birthRate - deathRate);
           naturalPop[code] = Math.max(0, Math.min(newPop, popCap));
@@ -489,8 +826,8 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
         COUNTRY_CODES.forEach(function(code) { immigrants[code] = 0; });
 
         COUNTRY_CODES.forEach(function(src) {
-          var emig = surplus[src] * EMIGRATION_RATE;
-          if (emig < 1 || !migrationTargets[src]) return;
+          var emig = (surplus[src] || 0) * EMIGRATION_RATE;
+          if (!isFinite(emig) || emig < 1 || !migrationTargets[src]) return;
 
           // Compute weights with GDP for this year
           var targets = migrationTargets[src];
@@ -516,8 +853,11 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
 
         // ③ Apply immigration
         COUNTRY_CODES.forEach(function(code) {
-          pop[code] = (naturalPop[code] || 0) + immigrants[code];
+          pop[code] = (naturalPop[code] || 0) + (immigrants[code] || 0);
         });
+
+        // Cache each intermediate year for fast playback
+        migrationPopCache[scenario + '_' + yr] = Object.assign({}, pop);
       }
 
       migrationPopCache[cacheKey] = pop;
@@ -539,14 +879,14 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
       var flows = [];
       COUNTRY_CODES.forEach(function(src) {
         var m = modelData[src];
-        if (!m || !pop[src]) return;
+        if (!m || !pop[src] || !isFinite(pop[src])) return;
         var yearTfr = calcYearTfr(m.t, m.s, scenario, year);
-        var deathRate = 1 / m.l;
+        var deathRate = calcYearDeathRate(m.l, scenario, year);
         var birthRate = deathRate * (yearTfr / 2.1) * (1 - m.i);
         var newPop = pop[src] * (1 + birthRate - deathRate);
         var surplus = Math.max(0, newPop - pop[src]);
         var emig = surplus * EMIGRATION_RATE;
-        if (emig < 1000 || !migrationTargets[src]) return;
+        if (!isFinite(emig) || emig < 1000 || !migrationTargets[src]) return;
 
         var targets = migrationTargets[src];
         var totalWeight = 0;
@@ -619,14 +959,11 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
     geometry.setDrawRange(0, 0);
 
     // ── Shader with wobble for ancient dots ──
-    var material = new THREE.ShaderMaterial({
-      uniforms: {
-        uTime: { value: 0.0 },
-        uWobble: { value: 1.0 }  // 1.0 = full wobble (ancient), 0.0 = none (modern)
-      },
-      vertexShader: [
+    var DOT_VERTEX_SHADER = [
         'uniform float uTime;',
         'uniform float uWobble;',
+        'uniform vec3 uSunDir;',
+        'uniform float uDayFade;', // 1.0 = lights vanish in daylight (cinema mode)
         'attribute vec3 aColor;',
         'attribute float aSize;',
         'attribute float aAlpha;',
@@ -634,7 +971,8 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
         'varying float vAlpha;',
         'void main() {',
         '  vColor = aColor;',
-        '  vAlpha = aAlpha;',
+        '  float sd = dot(normalize(position), uSunDir);',
+        '  vAlpha = aAlpha * (1.0 - uDayFade * smoothstep(-0.03, 0.12, sd));',
         '  float id = position.x * 13.7 + position.y * 7.3 + position.z * 11.1;',
         '  vec3 wobble = uWobble * vec3(',
         '    sin(uTime * 0.4 + id) * 0.15,',
@@ -645,8 +983,8 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
         '  gl_PointSize = clamp(aSize * (200.0 / -mvPosition.z), 1.0, 64.0);',
         '  gl_Position = projectionMatrix * mvPosition;',
         '}',
-      ].join('\n'),
-      fragmentShader: [
+    ].join('\n');
+    var DOT_FRAGMENT_SHADER = [
         'varying vec3 vColor;',
         'varying float vAlpha;',
         'void main() {',
@@ -656,13 +994,42 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
         '  glow = glow * glow;',
         '  gl_FragColor = vec4(vColor * glow, glow * vAlpha);',
         '}',
-      ].join('\n'),
-      transparent: true,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-    });
+    ].join('\n');
 
+    function makeDotMaterial(wobble) {
+      return new THREE.ShaderMaterial({
+        uniforms: {
+          uTime: { value: 0.0 },
+          uWobble: { value: wobble },  // 1.0 = full wobble (ancient), 0.0 = none
+          uSunDir: { value: new THREE.Vector3(0, 0, 1) },
+          uDayFade: { value: 0.0 }
+        },
+        vertexShader: DOT_VERTEX_SHADER,
+        fragmentShader: DOT_FRAGMENT_SHADER,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      });
+    }
+
+    var material = makeDotMaterial(1.0);
     var pointCloud = new THREE.Points(geometry, material);
+
+    // ── Machine light layer (speculative): 1 dot = 1 GW ──
+    // Machine light follows energy and cooling, not rivers and coasts
+    var MACHINE_MAX = 6200;
+    var machinePositions = new Float32Array(MACHINE_MAX * 3);
+    var machineColors = new Float32Array(MACHINE_MAX * 3);
+    var machineSizes = new Float32Array(MACHINE_MAX);
+    var machineAlphas = new Float32Array(MACHINE_MAX);
+    var machineGeometry = new THREE.BufferGeometry();
+    machineGeometry.setAttribute('position', new THREE.BufferAttribute(machinePositions, 3));
+    machineGeometry.setAttribute('aColor', new THREE.BufferAttribute(machineColors, 3));
+    machineGeometry.setAttribute('aSize', new THREE.BufferAttribute(machineSizes, 1));
+    machineGeometry.setAttribute('aAlpha', new THREE.BufferAttribute(machineAlphas, 1));
+    machineGeometry.setDrawRange(0, 0);
+    var machineMaterial = makeDotMaterial(0.0); // machine light never flickers
+    var machinePoints = new THREE.Points(machineGeometry, machineMaterial);
 
     // Add to ThreeGlobe
     setTimeout(function() {
@@ -671,8 +1038,239 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
         if (!found && obj.type === 'Group' && obj.children.length > 5) found = obj;
       });
       (found || world.scene()).add(pointCloud);
+      (found || world.scene()).add(machinePoints);
+      (found || world.scene()).add(satPoints);
       console.log('Points added');
     }, 500);
+
+    // ── Machine light sites: cheap energy + cooling + fiber ──
+    // {lat, lng, w: growth weight, s: spread in degrees}
+    var MACHINE_SITES = [
+      { lat: 64.1, lng: -21.9, w: 3, s: 1.2 },  // Iceland (geothermal)
+      { lat: 69.6, lng: 18.9,  w: 2, s: 1.5 },  // N Norway (hydro, arctic cooling)
+      { lat: 65.6, lng: 20.2,  w: 2, s: 1.5 },  // N Sweden
+      { lat: 64.5, lng: 26.0,  w: 2, s: 1.5 },  // Finland
+      { lat: 66.9, lng: -50.7, w: 1, s: 1.2 },  // Greenland
+      { lat: 57.5, lng: -3.8,  w: 1, s: 1.2 },  // Scotland (wind)
+      { lat: 53.3, lng: -8.0,  w: 2, s: 1.0 },  // Ireland
+      { lat: 48.5, lng: -72.0, w: 4, s: 2.5 },  // Quebec (hydro)
+      { lat: 50.4, lng: -89.0, w: 2, s: 2.5 },  // Ontario/Manitoba
+      { lat: 45.8, lng: -120.5, w: 3, s: 1.8 }, // Columbia River
+      { lat: 36.8, lng: -115.5, w: 3, s: 1.8 }, // Nevada (solar)
+      { lat: 31.8, lng: -100.5, w: 4, s: 2.5 }, // Texas
+      { lat: 42.5, lng: -94.5, w: 2, s: 2.2 },  // Midwest (wind)
+      { lat: 38.9, lng: -77.5, w: 3, s: 1.2 },  // N Virginia (existing hub)
+      { lat: 37.8, lng: -4.8,  w: 2, s: 1.8 },  // S Spain (solar)
+      { lat: 30.5, lng: -6.5,  w: 3, s: 2.2 },  // Morocco Sahara
+      { lat: 28.0, lng: 3.0,   w: 2, s: 2.5 },  // Algeria Sahara
+      { lat: 27.5, lng: 30.5,  w: 2, s: 2.0 },  // Egypt
+      { lat: 24.5, lng: 44.0,  w: 3, s: 2.5 },  // Saudi Arabia
+      { lat: 24.2, lng: 54.5,  w: 2, s: 1.2 },  // UAE
+      { lat: -23.5, lng: 15.5, w: 2, s: 2.0 },  // Namib desert
+      { lat: 0.5,  lng: 36.2,  w: 1, s: 1.2 },  // Kenya (Rift geothermal)
+      { lat: -24.2, lng: -69.3, w: 3, s: 1.8 }, // Atacama (solar)
+      { lat: -47.0, lng: -70.5, w: 1, s: 2.0 }, // Patagonia (wind)
+      { lat: -21.5, lng: 118.8, w: 3, s: 2.5 }, // Pilbara
+      { lat: -31.5, lng: 137.5, w: 2, s: 2.5 }, // S Australia
+      { lat: 43.5, lng: 105.0, w: 3, s: 3.0 },  // Gobi
+      { lat: 42.0, lng: 88.5,  w: 2, s: 2.8 },  // Xinjiang
+      { lat: 47.5, lng: 66.5,  w: 2, s: 2.8 },  // Kazakhstan
+      { lat: 54.5, lng: 103.5, w: 2, s: 2.5 },  // Siberia (hydro)
+      { lat: 62.5, lng: 129.8, w: 1, s: 2.0 },  // Yakutia
+      { lat: 27.0, lng: 71.5,  w: 2, s: 2.0 },  // Rajasthan (solar)
+      { lat: 43.5, lng: 142.5, w: 1, s: 1.2 },  // Hokkaido
+    ];
+    var MACHINE_TOTAL_W = MACHINE_SITES.reduce(function(sum, s) { return sum + s.w; }, 0);
+
+    var showMachine = false;
+
+    // Total machine GW: ~60 GW in 2025, doubling every 12 years (speculative)
+    function machineGW(year) {
+      return Math.min(MACHINE_MAX, Math.round(60 * Math.pow(2, (year - 2025) / 12)));
+    }
+
+    // Per-site RNG is seeded by site only, so each year's dots are a prefix
+    // of the next year's: the light grows instead of reshuffling
+    var machineDotCache = {};
+    function generateMachineDots(year) {
+      var key = String(year);
+      if (machineDotCache[key]) return machineDotCache[key];
+      var total = machineGW(year);
+      var result = [];
+      MACHINE_SITES.forEach(function(site, si) {
+        var n = Math.round(total * site.w / MACHINE_TOTAL_W);
+        var rng = seededRng(si * 7919 + 17);
+        for (var i = 0; i < n; i++) {
+          var dlat = (rng() + rng() - 1) * site.s;
+          var dlng = (rng() + rng() - 1) * site.s * 1.6;
+          result.push([site.lat + dlat, site.lng + dlng]);
+        }
+      });
+      machineDotCache[key] = result;
+      return result;
+    }
+
+    function updateMachineLayer(year) {
+      if (!showMachine || year <= 2023) {
+        machineGeometry.setDrawRange(0, 0);
+        return;
+      }
+      var dots = generateMachineDots(year);
+      var n = Math.min(dots.length, MACHINE_MAX);
+      for (var i = 0; i < n; i++) {
+        var pos = polar2Cartesian(dots[i][0], dots[i][1], 0.004);
+        machinePositions[i*3]   = pos[0];
+        machinePositions[i*3+1] = pos[1];
+        machinePositions[i*3+2] = pos[2];
+        var v = 0.85 + (i % 4) * 0.05; // slight per-dot brightness variation
+        machineColors[i*3]   = 0.35 * v;
+        machineColors[i*3+1] = 0.85 * v;
+        machineColors[i*3+2] = 1.0 * v;
+        machineSizes[i] = 2.2;
+        machineAlphas[i] = 0.9;
+      }
+      machineGeometry.setDrawRange(0, n);
+      machineGeometry.getAttribute('position').needsUpdate = true;
+      machineGeometry.getAttribute('aColor').needsUpdate = true;
+      machineGeometry.getAttribute('aSize').needsUpdate = true;
+      machineGeometry.getAttribute('aAlpha').needsUpdate = true;
+    }
+
+    // ── Satellite layer (factual): a new kind of light, 1957– ──
+    // Approximate active satellites; future values extrapolate the megaconstellation era
+    var SAT_ANCHORS = [
+      [1957, 2], [1960, 30], [1965, 150], [1970, 300], [1980, 450],
+      [1990, 560], [2000, 720], [2010, 1000], [2015, 1400], [2019, 2200],
+      [2021, 4500], [2023, 7800], [2025, 11000], [2035, 25000], [2050, 40000], [2100, 60000]
+    ];
+    var SAT_MAX = 12000;
+    var showSats = true;
+
+    function satCount(year) {
+      if (year < 1957) return 0;
+      var a = SAT_ANCHORS;
+      if (year >= a[a.length-1][0]) return a[a.length-1][1];
+      for (var i = 0; i < a.length - 1; i++) {
+        if (year >= a[i][0] && year < a[i+1][0]) {
+          var f = (year - a[i][0]) / (a[i+1][0] - a[i][0]);
+          return Math.round(a[i][1] + (a[i+1][1] - a[i][1]) * f);
+        }
+      }
+      return 0;
+    }
+
+    // Pre-build all shell slots once; per-year display is just a draw range,
+    // so satellites accumulate instead of reshuffling
+    var satGeometry = new THREE.BufferGeometry();
+    (function buildSats() {
+      var pos = new Float32Array(SAT_MAX * 3);
+      var col = new Float32Array(SAT_MAX * 3);
+      var siz = new Float32Array(SAT_MAX);
+      var alp = new Float32Array(SAT_MAX);
+      var rng = seededRng(424242);
+      var MAX_INCL = Math.sin(65 * DEG2RAD);
+      for (var i = 0; i < SAT_MAX; i++) {
+        var lat = Math.asin((rng() * 2 - 1) * MAX_INCL) / DEG2RAD;
+        var lng = rng() * 360 - 180;
+        var p = polar2Cartesian(lat, lng, 0.06 + rng() * 0.06); // LEO band, above the atmosphere shell
+        pos[i*3] = p[0]; pos[i*3+1] = p[1]; pos[i*3+2] = p[2];
+        var v = 0.8 + rng() * 0.2;
+        col[i*3] = 0.72 * v; col[i*3+1] = 0.80 * v; col[i*3+2] = 0.95 * v;
+        siz[i] = 1.3;
+        alp[i] = 0.5;
+      }
+      satGeometry.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      satGeometry.setAttribute('aColor', new THREE.BufferAttribute(col, 3));
+      satGeometry.setAttribute('aSize', new THREE.BufferAttribute(siz, 1));
+      satGeometry.setAttribute('aAlpha', new THREE.BufferAttribute(alp, 1));
+      satGeometry.setDrawRange(0, 0);
+    })();
+    var satMaterial = makeDotMaterial(0.0);
+    var satPoints = new THREE.Points(satGeometry, satMaterial);
+    (function satOrbit() { // slow shell rotation: the lights that move
+      satPoints.rotation.y = performance.now() / 1000 * 0.03;
+      requestAnimationFrame(satOrbit);
+    })();
+
+    // Returns satellites-per-dot for the legend (0 = layer hidden)
+    function updateSatLayer(year) {
+      if (!showSats || year < 1957) {
+        satGeometry.setDrawRange(0, 0);
+        return 0;
+      }
+      var count = satCount(year);
+      var dots = Math.min(count, SAT_MAX);
+      satGeometry.setDrawRange(0, dots);
+      return Math.max(1, Math.round(count / dots));
+    }
+
+    // ── Cinema mode: day & night ──
+    // A fixed sun; the day side shows Blue Marble, human light appears only in
+    // shadow. The camera's slow orbit carries you across the terminator.
+    var SUN_DIR = (function() {
+      var p = polar2Cartesian(15, -60, 0); // noon over the Caribbean → Asia in night at load
+      return new THREE.Vector3(p[0], p[1], p[2]).normalize();
+    })();
+    var showCinema = false;
+    var cinemaMaterial = null;
+    var origGlobeMaterial = null;
+
+    function buildCinemaMaterial() {
+      var loader = new THREE.TextureLoader();
+      var dayTex = loader.load('blue_marble_day.jpg');
+      var nightTex = loader.load('earth_night_base.jpg');
+      dayTex.colorSpace = THREE.SRGBColorSpace;
+      nightTex.colorSpace = THREE.SRGBColorSpace;
+      return new THREE.ShaderMaterial({
+        uniforms: {
+          uDay: { value: dayTex },
+          uNight: { value: nightTex },
+          uSunDir: { value: SUN_DIR },
+        },
+        vertexShader: [
+          'varying vec2 vUv;',
+          'varying vec3 vWNormal;',
+          'void main() {',
+          '  vUv = uv;',
+          '  vWNormal = normalize(mat3(modelMatrix) * normal);',
+          '  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);',
+          '}',
+        ].join('\n'),
+        fragmentShader: [
+          'uniform sampler2D uDay;',
+          'uniform sampler2D uNight;',
+          'uniform vec3 uSunDir;',
+          'varying vec2 vUv;',
+          'varying vec3 vWNormal;',
+          'void main() {',
+          '  float sd = dot(normalize(vWNormal), uSunDir);',
+          '  float dayAmt = smoothstep(-0.10, 0.15, sd);',
+          '  vec3 day = texture2D(uDay, vUv).rgb;',
+          '  vec3 night = texture2D(uNight, vUv).rgb;',
+          // warm band along the terminator: dawn and dusk
+          '  float band = smoothstep(-0.18, -0.02, sd) * (1.0 - smoothstep(-0.02, 0.25, sd));',
+          '  vec3 col = mix(night * 0.9, day * 0.95, dayAmt);',
+          '  col += day * vec3(1.0, 0.45, 0.22) * band * 0.35;',
+          '  gl_FragColor = vec4(col, 1.0);',
+          '}',
+        ].join('\n'),
+      });
+    }
+
+    function setCinema(on) {
+      showCinema = on;
+      if (on) {
+        if (!cinemaMaterial) cinemaMaterial = buildCinemaMaterial();
+        if (!origGlobeMaterial) origGlobeMaterial = world.globeMaterial();
+        world.globeMaterial(cinemaMaterial);
+      } else if (origGlobeMaterial) {
+        world.globeMaterial(origGlobeMaterial);
+      }
+      [material, machineMaterial].forEach(function(m) {
+        m.uniforms.uSunDir.value.copy(SUN_DIR);
+        m.uniforms.uDayFade.value = on ? 1.0 : 0.0;
+      });
+    }
 
     // ── World population helper ──
     function getWorldPop(year) {
@@ -720,7 +1318,12 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
 
       // Era: ancient (<1800) vs modern (>=1800)
       var ancient = (year < 1800);
-      material.uniforms.uWobble.value = 1.0;
+      // Ageless future: the flicker of mortality fades out — frozen light
+      var wobble = 1.0;
+      if (year > 2023 && currentScenario === 'ageless') {
+        wobble = Math.max(0, 1 - Math.max(0, year - AGELESS_START) / 40);
+      }
+      material.uniforms.uWobble.value = wobble;
 
       // Color
       var fireR = 1.0, fireG = 0.3, fireB = 0.05;
@@ -742,7 +1345,7 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
           var targetYear = Math.min(year, 2100);
           for (var yr = 2024; yr <= targetYear; yr++) {
             var yearTfr = Math.max(0, tfr + slope * (yr - 2023));
-            var deathRate = 1 / le;
+            var deathRate = calcYearDeathRate(le, currentScenario, yr);
             var fertilityRatio = yearTfr / 2.1;
             var births = (working + young * 0.3) * deathRate * fertilityRatio * (1 - im);
             var youngToWork = young / 15;
@@ -803,10 +1406,14 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
       document.getElementById('year-label').textContent = formatYear(Math.round(year));
       var legendEl = document.getElementById('legend-label');
       var legendBase = t.dotLegend + (ancient ? t.dotLegendAncient : '');
+      if (showMachine && year > 2023) legendBase += '   ' + t.machineLegend;
+      var satPerDot = updateSatLayer(year);
+      if (satPerDot === 1) legendBase += '   ' + t.satLegendOne;
+      else if (satPerDot > 1) legendBase += '   ' + t.satLegendMany.replace('{n}', satPerDot);
       if (showAge && year >= 1950) {
         legendEl.innerHTML = legendBase + '<br>' + t.ageLegend;
       } else {
-        legendEl.textContent = legendBase;
+        legendEl.innerHTML = legendBase;
       }
 
       var worldPop;
@@ -814,6 +1421,8 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
         var migPop = computeAllFuturePop(year, currentScenario);
         worldPop = 0;
         COUNTRY_CODES.forEach(function(code) { worldPop += migPop[code] || 0; });
+      } else if (year > 2023) {
+        worldPop = getFutureWorldPop(year, currentScenario);
       } else {
         worldPop = getWorldPop(year);
       }
@@ -828,6 +1437,13 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
       });
       migrationBtn.style.opacity = inFuture ? '' : '0.3';
       migrationBtn.style.pointerEvents = inFuture ? '' : 'none';
+      machineBtn.style.opacity = inFuture ? '' : '0.3';
+      machineBtn.style.pointerEvents = inFuture ? '' : 'none';
+      var satEra = year >= 1957;
+      satBtn.style.opacity = satEra ? '' : '0.3';
+      satBtn.style.pointerEvents = satEra ? '' : 'none';
+
+      updateMachineLayer(year);
 
       // ── Migration flow arcs ──
       if (showMigration && year > 2023) {
@@ -866,6 +1482,7 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
     var TICK_INTERVAL = 300;
 
     slider.addEventListener('input', function() {
+      if (storyMode) exitStory();
       currentIdx = parseInt(slider.value);
       currentYear = TIMELINE[currentIdx];
       updateYear(currentYear);
@@ -880,10 +1497,18 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
 
     // Keyboard controls
     document.addEventListener('keydown', function(e) {
+      if (storyMode) {
+        if (e.key === 'ArrowLeft') { storyStep(-1); e.preventDefault(); }
+        else if (e.key === 'ArrowRight' || e.key === ' ') { storyStep(1); e.preventDefault(); }
+        else if (e.key === 'Escape' || e.key === 's' || e.key === 'S') { exitStory(); }
+        return;
+      }
       if (e.key === 'ArrowLeft') { stepBy(-1); e.preventDefault(); }
       else if (e.key === 'ArrowRight') { stepBy(1); e.preventDefault(); }
       else if (e.key === ' ') { playBtn.click(); e.preventDefault(); }
       else if (e.key === 'r' || e.key === 'R') { rotateBtn.click(); }
+      else if (e.key === 's' || e.key === 'S') { enterStory(); }
+      else if (e.key === 'c' || e.key === 'C') { cinemaBtn.click(); }
     });
 
     var playBtn = document.getElementById('play-btn');
@@ -915,10 +1540,11 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
       requestAnimationFrame(animate);
     }
 
-    // Speed buttons
-    document.querySelectorAll('.speed-btn:not(.scenario-btn)').forEach(function(btn) {
+    // Speed buttons (data-speed only: age/migration/machine/lang share the
+    // .speed-btn style but must not receive this handler)
+    document.querySelectorAll('.speed-btn[data-speed]').forEach(function(btn) {
       btn.addEventListener('click', function() {
-        document.querySelectorAll('.speed-btn:not(.scenario-btn)').forEach(function(b) { b.classList.remove('active'); });
+        document.querySelectorAll('.speed-btn[data-speed]').forEach(function(b) { b.classList.remove('active'); });
         btn.classList.add('active');
         speed = parseInt(btn.dataset.speed);
       });
@@ -954,12 +1580,26 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
       var popCap = pop * 3;
       for (var yr = 2024; yr <= year; yr++) {
         var yearTfr = calcYearTfr(m.t, m.s, scenario, yr);
-        var deathRate = 1 / m.l;
+        var deathRate = calcYearDeathRate(m.l, scenario, yr);
         var birthRate = deathRate * (yearTfr / REPLACEMENT_TFR) * (1 - m.i);
         pop = pop * (1 + birthRate - deathRate);
         pop = Math.max(0, Math.min(pop, popCap));
       }
       return pop;
+    }
+
+    // World total for future years (pop_history ends at 2023)
+    var futureWorldPopCache = {};
+    function getFutureWorldPop(year, scenario) {
+      var key = scenario + '_' + year;
+      if (futureWorldPopCache[key]) return futureWorldPopCache[key];
+      var total = 0;
+      COUNTRY_CODES.forEach(function(code) {
+        var m = modelData[code];
+        if (m) total += computeFuturePop(m, year, scenario);
+      });
+      futureWorldPopCache[key] = total;
+      return total;
     }
 
     // Get 2023 dot positions per country (from allDots['2023'] or nearest)
@@ -1019,6 +1659,7 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
       linear: t.scenarioLinear,
       stable: t.scenarioStable,
       soft:   t.scenarioSoft,
+      ageless: t.scenarioAgeless,
     };
     document.querySelectorAll('.scenario-btn').forEach(function(btn) {
       btn.addEventListener('click', function() {
@@ -1028,6 +1669,7 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
         futureDotCache = {};
         migrationPopCache = {};
         migrationFlowCache = {};
+        futureWorldPopCache = {};
         infoLabel.textContent = SCENARIOS[currentScenario];
         updateYear(currentYear);
       });
@@ -1059,6 +1701,30 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
       updateYear(currentYear);
     });
 
+    // Machine light toggle
+    var machineBtn = document.getElementById('machine-btn');
+    machineBtn.addEventListener('click', function() {
+      showMachine = !showMachine;
+      machineBtn.style.color = showMachine ? '#fff' : '';
+      updateYear(currentYear);
+    });
+
+    // Cinema (day/night) toggle
+    var cinemaBtn = document.getElementById('cinema-btn');
+    cinemaBtn.addEventListener('click', function() {
+      setCinema(!showCinema);
+      cinemaBtn.style.color = showCinema ? '#fff' : '';
+    });
+
+    // Satellite layer toggle (on by default)
+    var satBtn = document.getElementById('sat-btn');
+    satBtn.style.color = '#fff';
+    satBtn.addEventListener('click', function() {
+      showSats = !showSats;
+      satBtn.style.color = showSats ? '#fff' : '';
+      updateYear(currentYear);
+    });
+
     // Rotate toggle
     var rotateBtn = document.getElementById('rotate-btn');
     var rotating = true;
@@ -1068,6 +1734,118 @@ import Globe from 'https://esm.sh/globe.gl@2.45.3?deps=three@0.183.0';
       if (controls) controls.autoRotate = rotating;
       rotateBtn.style.color = rotating ? '#fff' : '';
     });
+
+    // ── Story mode: a guided fable in 8 chapters ──
+    // Camera geo per chapter; narrative text lives in I18N[lang].story
+    var STORY_GEO = [
+      { year: -10000, lat: 34, lng: 40,  alt: 1.7 },  // Fertile Crescent
+      { year: -3000,  lat: 31, lng: 45,  alt: 1.4 },  // Mesopotamia
+      { year: 0,      lat: 35, lng: 65,  alt: 2.3 },  // Rome <-> Han, wide
+      { year: 1400,   lat: 46, lng: 12,  alt: 1.6 },  // Europe after the plague
+      { year: 1800,   lat: 52, lng: -1,  alt: 1.5 },  // Britain
+      { year: 1950,   lat: 22, lng: 45,  alt: 2.4 },  // wide view
+      { year: 2023,   lat: 24, lng: 90,  alt: 2.2 },  // South/East Asia
+      { year: 2100,   lat: 20, lng: 100, alt: 2.5 },  // wide view, the open ending
+      { year: 2100,   lat: 55, lng: -25, alt: 2.1, preset: 'frozen' },  // N Atlantic: Iceland's machine light
+      { year: 2100,   lat: 15, lng: 30,  alt: 58, dur: 6000 },          // the pale blue dot
+    ];
+
+    var storyMode = false;
+    var storyIdx = 0;
+    var storyWasRotating = false;
+    var storyCard = document.getElementById('story-card');
+    var storyInner = document.getElementById('story-inner');
+    var storyPrevBtn = document.getElementById('story-prev');
+    var storyNextBtn = document.getElementById('story-next');
+    var storyProgress = document.getElementById('story-progress');
+    var storyBtn = document.getElementById('story-btn');
+
+    // Progress dots (one per chapter)
+    STORY_GEO.forEach(function() {
+      storyProgress.appendChild(document.createElement('span'));
+    });
+    storyPrevBtn.textContent = t.storyBack;
+
+    function chapterAltitude(alt) {
+      return window.innerWidth < 768 ? alt + 1.2 : alt;
+    }
+
+    function showChapter(i) {
+      storyIdx = i;
+      var geo = STORY_GEO[i];
+      // Epilogue: switch on the ageless scenario + machine light. Deliberately
+      // left on after the story ends — the epilogue hands you the scenario.
+      if (geo.preset === 'frozen') {
+        if (currentScenario !== 'ageless') {
+          var agelessBtn = document.querySelector('.scenario-btn[data-scenario="ageless"]');
+          if (agelessBtn) agelessBtn.click();
+        }
+        if (!showMachine) machineBtn.click();
+      }
+      var idx = TIMELINE.indexOf(geo.year);
+      if (idx >= 0) {
+        currentIdx = idx;
+        currentYear = geo.year;
+        slider.value = idx;
+        updateYear(currentYear);
+      }
+      var alt = geo.alt > 10 ? geo.alt : chapterAltitude(geo.alt); // pull-back needs no mobile boost
+      world.pointOfView({ lat: geo.lat, lng: geo.lng, altitude: alt }, geo.dur || 2200);
+
+      // Fade text out, swap, fade back in
+      storyInner.style.opacity = 0;
+      setTimeout(function() {
+        var ch = t.story[i];
+        document.getElementById('story-chapter').textContent = t.storyChapterLabel + (i + 1) + ' / ' + STORY_GEO.length;
+        document.getElementById('story-title').textContent = ch.title;
+        document.getElementById('story-text').textContent = ch.text;
+        storyInner.style.opacity = 1;
+      }, 350);
+
+      storyPrevBtn.disabled = (i === 0);
+      storyNextBtn.textContent = (i === STORY_GEO.length - 1) ? t.storyFin : t.storyNext;
+      storyProgress.querySelectorAll('span').forEach(function(dot, j) {
+        dot.classList.toggle('active', j === i);
+      });
+    }
+
+    function storyStep(delta) {
+      var next = storyIdx + delta;
+      if (next >= STORY_GEO.length) { exitStory(); return; }
+      if (next < 0) return;
+      showChapter(next);
+    }
+
+    function enterStory() {
+      if (storyMode) return;
+      storyMode = true;
+      if (playing) playBtn.click(); // pause timeline playback
+      storyWasRotating = rotating;
+      if (controls) controls.autoRotate = false;
+      storyBtn.style.color = '#fff';
+      storyCard.classList.add('visible');
+      showChapter(0);
+    }
+
+    function exitStory() {
+      if (!storyMode) return;
+      storyMode = false;
+      if (controls) controls.autoRotate = storyWasRotating;
+      storyBtn.style.color = '';
+      storyCard.classList.remove('visible');
+      // If the story left us in deep space, come home
+      var pov = world.pointOfView();
+      if (pov && pov.altitude > 10) {
+        world.pointOfView({ altitude: window.innerWidth < 768 ? 3.5 : 2.2 }, 2500);
+      }
+    }
+
+    storyBtn.addEventListener('click', function() {
+      storyMode ? exitStory() : enterStory();
+    });
+    storyNextBtn.addEventListener('click', function() { storyStep(1); });
+    storyPrevBtn.addEventListener('click', function() { storyStep(-1); });
+    document.getElementById('story-close').addEventListener('click', exitStory);
 
     // Wobble animation
     function wobbleLoop() {
